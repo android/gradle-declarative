@@ -1,0 +1,9 @@
+[[plugins]]
+id = "com.android.library"
+
+[android]
+compileSdk = 33
+namespace = "com.example.helloworld"
+
+[android.defaultConfig]
+minSdk = 21

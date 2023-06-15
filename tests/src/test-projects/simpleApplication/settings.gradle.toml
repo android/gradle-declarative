@@ -1,0 +1,9 @@
+[[pluginsManagement.repositories.inheritSettings]]
+
+[[plugins]]
+id = "com.android.application"
+module = "com.android.tools.build:gradle"
+version = "8.2.0-dev"
+
+[includes]
+app = ":app"
