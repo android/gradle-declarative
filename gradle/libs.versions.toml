@@ -19,7 +19,7 @@ truth = { module = "com.google.truth:truth", version.ref = "truth" }
 testutils = { module = "com.android.tools:testutils", version.ref = "sdk-version" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm", version.ref = "coroutines" }
 toolsCommon = { module = "com.android.tools:common", version.ref = "sdk-version"}
-declarativeModel = { module = "com.android.tools.gradle.declarative:model", version.ref = "agp-version" }
+declarativeModel = { module = "com.android.tools.build.declarative:model", version.ref = "agp-version" }
 agpApi = { module = "com.android.tools.build:gradle-api", version.ref = "agp-version" }
 testFramework = { module = "com.android.build.integration-test:framework", version.ref = "agp-version" }
 

@@ -15,7 +15,7 @@
  */
 package com.android.declarative.internal
 
-import com.android.declarative.internal.model.DependenciesDAG
+import com.android.declarative.internal.model.ProjectDependenciesDAG
 import com.android.declarative.internal.model.ResolvedModuleInfo
 import com.android.declarative.internal.parsers.DeclarativeFileParser
 import com.android.declarative.internal.parsers.DependenciesResolver
@@ -249,7 +249,7 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
     private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings) {
         val dependenciesResolver = DependenciesResolver(logger)
         // create the DAG of project dependencies, it will be easier to manipulate.
-        val dependenciesDAG = DependenciesDAG.create(
+        val dependenciesDAG = ProjectDependenciesDAG.create(
             runBlocking {
                 dependenciesResolver.readAllProjectsDependencies(
                     settings.settingsDir,

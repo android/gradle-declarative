@@ -19,6 +19,9 @@ package com.android.declarative.internal
 
 import com.android.declarative.internal.model.DependencyInfo
 import com.android.declarative.internal.model.DependencyType
+import com.android.declarative.internal.model.FilesDependencyInfo
+import com.android.declarative.internal.model.MavenDependencyInfo
+import com.android.declarative.internal.model.NotationDependencyInfo
 import org.gradle.api.Project
 import org.gradle.api.artifacts.dsl.DependencyFactory
 import org.gradle.api.artifacts.dsl.DependencyHandler
@@ -39,7 +42,7 @@ class DependencyProcessor(
     fun process(dependencies: List<DependencyInfo>) {
         dependencies.forEach { dependency ->
             when(dependency) {
-                is DependencyInfo.NotationDependencyInfo -> {
+                is NotationDependencyInfo -> {
                     if (dependency.type == DependencyType.PROJECT) {
                         addProjectDependency(
                             dependency.configuration,
@@ -51,17 +54,17 @@ class DependencyProcessor(
                         )
                     }
                 }
-                is DependencyInfo.FilesDependencyInfo -> {
+                is FilesDependencyInfo -> {
                     addFilesDependency(dependency)
                 }
-                is DependencyInfo.MavenDependencyInfo -> {
+                is MavenDependencyInfo -> {
                     addLibraryDependency(dependency)
                 }
             }
         }
     }
 
-    private fun addFilesDependency(dependency: DependencyInfo.FilesDependencyInfo) {
+    private fun addFilesDependency(dependency: FilesDependencyInfo) {
         val fileCollection = fileCollectionFactory()
         dependency.files.forEach(fileCollection::from)
         println("adding files dependency ${dependency.files} to ${dependency.configuration}")
@@ -73,7 +76,7 @@ class DependencyProcessor(
         )
     }
 
-    private fun addLibraryDependency(dependency: DependencyInfo.MavenDependencyInfo) {
+    private fun addLibraryDependency(dependency: MavenDependencyInfo) {
         println("Adding maven ${dependency.name} to ${dependency.configuration}")
         dependencyHandler.add(
             dependency.configuration,
@@ -91,7 +94,7 @@ class DependencyProcessor(
         dependencyHandler.add(configurationName, dependencyFactory.create(dependencyTarget))
     }
 
-    private fun addNotationDependency(dependencyInfo: DependencyInfo.NotationDependencyInfo) {
+    private fun addNotationDependency(dependencyInfo: NotationDependencyInfo) {
         val dependency = when(dependencyInfo.notation) {
             "localGroovy" -> dependencyFactory.localGroovy()
             "gradleApi" -> dependencyFactory.gradleApi()
