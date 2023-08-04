@@ -53,6 +53,6 @@ settings.gradle.beforeProject {
 includeBuild("$workspaceLocation/tools") {
     dependencySubstitution {
         substitute(module("com.android.build.integration-test:framework")).using(project(":base:build-system:integration-test:framework"))
+        substitute(module("com.android.tools.build.declarative:model")).using(project(":base:declarative-gradle:model"))
     }
 }
-

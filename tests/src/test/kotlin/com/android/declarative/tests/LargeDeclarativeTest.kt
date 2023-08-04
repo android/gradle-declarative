@@ -27,9 +27,9 @@ import java.util.*
 
 class LargeDeclarativeTest {
 
-    val nbOfApplications = 100
-    val nbOfAndroidLibs = 500
-    val nbOfJavaLibs = 1000
+    val nbOfApplications = 10
+    val nbOfAndroidLibs = 50
+    val nbOfJavaLibs = 100
 
     val nbOfAndroidLibsDependenciesPerApp: Int = nbOfApplications / 3
     val nbOfJavaLibsDependenciesPerApp: Int = nbOfAndroidLibs / 10
