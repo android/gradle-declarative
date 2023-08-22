@@ -19,7 +19,7 @@ val agpWorkspaceLocationProperty = providers.gradleProperty("com.android.workspa
 val agpWorkspaceLocation  = if (agpWorkspaceLocationProperty.isPresent) {
     agpWorkspaceLocationProperty.get()
 } else {
-    System.getenv("WORKSPACE_LOCATION") ?:
+    System.getenv("AGP_WORKSPACE_LOCATION") ?:
         throw java.lang.IllegalArgumentException(
             "com.android.workspace.location Gradle property must point to your checked out studio-main workspace"
         )
