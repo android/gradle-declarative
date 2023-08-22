@@ -3,14 +3,14 @@
 ## Building
 
 To build the agp-experimental/declarative, you need to also have Android Studio codebase checked out
-and pointed to by the WORKSPACE_LOCATION environment variable. It is needed to access some of the testing
+and pointed to by the AGP_WORKSPACE_LOCATION environment variable. It is needed to access some of the testing
 infrastructure like accessing SDK, NDK and services like exploring APKs, AARs, etc...
 You also need to have the CUSTOM_REPO environment variable set. 
 
 So for example this is what I use on my mac
 ```
-WORKSPACE_LOCATION=/Users/jedo/src/studio-main
-CUSTOM_REPO=$WORKSPACE_LOCATION/out/repo:$WORKSPACE_LOCATION/prebuilts/tools/common/m2/repository
+AGP_WORKSPACE_LOCATION=/Users/jedo/src/studio-main
+CUSTOM_REPO=$AGP_WORKSPACE_LOCATION/out/repo:$AGP_WORKSPACE_LOCATION/prebuilts/tools/common/m2/repository
 ```
 
 To build : `gw publish`
