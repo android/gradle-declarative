@@ -15,12 +15,15 @@ include("tests")
 // related to test project building and APK files exploration.
 // Therefore, one must define the "com.android.workspace.location" property to point to the location of the
 // studio-main workspace.
-val workspaceLocationProperty = providers.gradleProperty("com.android.workspace.location")
-if (!workspaceLocationProperty.isPresent) {
-    throw java.lang.IllegalArgumentException(
-        "com.android.workspace.location Gradle property must point to your checked out studio-main workspace")
+val agpWorkspaceLocationProperty = providers.gradleProperty("com.android.workspace.location")
+val agpWorkspaceLocation  = if (agpWorkspaceLocationProperty.isPresent) {
+    agpWorkspaceLocationProperty.get()
+} else {
+    System.getenv("AGP_WORKSPACE_LOCATION") ?:
+        throw java.lang.IllegalArgumentException(
+            "com.android.workspace.location Gradle property must point to your checked out studio-main workspace"
+        )
 }
-val workspaceLocation = workspaceLocationProperty.get()
 
 // Provide the maven repositories to find all binaries and built dependencies.
 if (System.getenv("CUSTOM_REPO") != null) {
@@ -33,13 +36,16 @@ if (System.getenv("CUSTOM_REPO") != null) {
 } else {
     // no environment variable, revert to hardcoded versions from the workspace location
     dependencyResolutionManagement.repositories {
-        maven { url = java.net.URI("file://$workspaceLocation/out/repo") }
-        maven { url = java.net.URI("file://$workspaceLocation/prebuilts/tools/common/m2/repository") }
+        maven { url = java.net.URI("file://$agpWorkspaceLocation/out/repo") }
+        maven { url = java.net.URI("file://$agpWorkspaceLocation/prebuilts/tools/common/m2/repository") }
     }
 }
 
 // any tests module automatically on published plugins
 settings.gradle.beforeProject {
+    extra.apply {
+        set("agpWorkspace", agpWorkspaceLocation)
+    }
     if (path.contains("tests")) {
         this.afterEvaluate {
             this.getTasksByName("test", false).forEach {
@@ -50,7 +56,7 @@ settings.gradle.beforeProject {
 }
 
 // Include the studio-main build to retrieve the integration-test framework dependency that 'tests' project is using.
-includeBuild("$workspaceLocation/tools") {
+includeBuild("$agpWorkspaceLocation/tools") {
     dependencySubstitution {
         substitute(module("com.android.build.integration-test:framework")).using(project(":base:build-system:integration-test:framework"))
         substitute(module("com.android.tools.build.declarative:model")).using(project(":base:declarative-gradle:model"))
