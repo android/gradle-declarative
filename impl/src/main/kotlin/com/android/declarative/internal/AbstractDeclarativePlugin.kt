@@ -29,6 +29,16 @@ abstract class AbstractDeclarativePlugin {
 
     abstract val buildFileName: String
 
+    internal fun parseDeclarativeFile(
+        location: String,
+        declarativeFileContent: String,
+        issueLogger: IssueLogger,
+    ): TomlParseResult =
+        DeclarativeFileParser(issueLogger).parseDeclarativeFile(
+            location,
+            declarativeFileContent,
+        )
+
     internal fun parseDeclarativeInFolder(folder: File, issueLogger: IssueLogger): TomlParseResult =
         parseDeclarativeFile(Paths.get(folder.absolutePath, buildFileName), issueLogger)
 

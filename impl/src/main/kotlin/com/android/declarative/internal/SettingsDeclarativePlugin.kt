@@ -16,30 +16,24 @@
 package com.android.declarative.internal
 
 import com.android.declarative.internal.model.ProjectDependenciesDAG
-import com.android.declarative.internal.model.ResolvedModuleInfo
 import com.android.declarative.internal.parsers.DeclarativeFileParser
 import com.android.declarative.internal.parsers.DependenciesResolver
-import com.android.declarative.internal.parsers.ModuleInfoResolver
 import com.android.declarative.internal.toml.checkElementsPresence
 import com.android.declarative.internal.toml.forEach
 import com.android.declarative.internal.toml.forEachTable
 import com.android.declarative.internal.toml.safeGetString
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.initialization.Settings
 import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.internal.time.Time
-import org.slf4j.LoggerFactory
 import org.tomlj.TomlParseResult
 import java.io.File
 import java.net.URL
-import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
+import javax.inject.Inject
+import org.gradle.api.model.ObjectFactory
 
 /**
  * Plugin implementation that handles [Settings] population from a settings.gradle.toml file
@@ -47,7 +41,9 @@ import java.util.logging.Logger
  * It also offers other services like automatically registering the declarative plugin
  * to each module in this project.
  */
-class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
+class SettingsDeclarativePlugin @Inject constructor(
+    val objects: ObjectFactory
+): AbstractDeclarativePlugin(), Plugin<Settings> {
     override val buildFileName: String
         get() = "settings.gradle.toml"
 
@@ -58,11 +54,26 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
 
     override fun apply(settings: Settings) {
 
+        val declarativeProvider = DeclarativeFileValueSource.enlist(
+            objects,
+            settings,
+            buildFileName
+        )
+        val declarativeFileContent = if (declarativeProvider.isPresent) {
+            declarativeProvider.get()
+        } else null
+
+        if (declarativeFileContent.isNullOrEmpty()) return
+
         val settingsDeclarations: TomlParseResult = Time.currentTimeMillis().run {
-            val parseResult = super.parseDeclarativeInFolder(
-                settings.settingsDir,
-                logger,
-            )
+
+            val parseResult: TomlParseResult = Time.currentTimeMillis().run {
+                super.parseDeclarativeFile(
+                    "${settings.settingsDir}${File.separatorChar}$buildFileName",
+                    declarativeFileContent,
+                    logger
+                )
+            }
             println("$buildFileName parsing finished in ${Time.currentTimeMillis() - this} ms")
             parseResult
         }
@@ -98,66 +109,49 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
                 configureSubProject(project)
             }
         }
-
         declareSubProjectsToGradle(settingsDeclarations, settings)
     }
-
-    private suspend fun readAllProjectsDependencies(
-        rootDir: File,
-        parsedDecl: TomlParseResult
-    ): Map<String, ResolvedModuleInfo> {
-        val mapOfDependencies = ConcurrentHashMap<String, ResolvedModuleInfo>()
-        Time.currentTimeMillis().run {
-            coroutineScope {
-                parsedDecl.forEach("includes") { projectPath ->
-                    launch {
-                        readProjectDependencies(rootDir, projectPath)?.let {
-                            mapOfDependencies[projectPath] = it
-                        }
-                    }
-                }
-            }
-            println("all project dependencies parsing finished in ${Time.currentTimeMillis() - this} ms")
-        }
-        return mapOfDependencies
-    }
-
-    private suspend fun readProjectDependencies(rootDir: File, projectPath: String): ResolvedModuleInfo? =
-        withContext(Dispatchers.IO) {
-            File(File(rootDir, projectPath.substring(1)), "build.gradle.toml").let { buildFile ->
-                if (buildFile.exists()) {
-                    println("${Thread.currentThread().id} peeking at ${buildFile.absolutePath}")
-                    val tomlParseResult = super.parseDeclarativeFile(buildFile.toPath(), logger)
-                    return@withContext ModuleInfoResolver().parse(tomlParseResult, projectPath, logger)
-                }
-            }
-            return@withContext null
-        }
 
     private fun getListOfFocusedProjects(
         settings: Settings,
         parsedDecl: TomlParseResult,
     ): List<String> {
-        File(settings.settingsDir, "focus.toml").takeIf(File::exists)?.let { focusFile ->
-            val listOfProjects = mutableListOf<String>()
-            DeclarativeFileParser().parseDeclarativeFile(focusFile.toPath())
-                .forEach("focus", listOfProjects::add)
-            return listOfProjects.toList()
-        }
-        return if (parsedDecl.contains("focus")) {
-            parsedDecl.safeGetString("focus").split(",")
-        } else {
-            val listOfProjects = mutableListOf<String>()
-            val regex = Regex("(:[^:]*):(.*)")
-            settings.gradle.startParameter.taskNames.forEach {
-                if (regex.matches(it)) {
-                    regex.matchEntire(it)?.groups?.get(1)?.value?.let { projectName ->
-                        println("Focusing on $projectName from task name $it")
-                        listOfProjects.add(projectName)
+        val focusProvider = DeclarativeFileValueSource.enlist(
+            objects,
+            settings,
+            "focus.toml"
+        )
+
+        if (focusProvider.isPresent) {
+            val fileContents = focusProvider.get()
+                ?: return listOf()
+
+            File(settings.settingsDir, "focus.toml").takeIf(File::exists)?.let { focusFile ->
+                val listOfProjects = mutableListOf<String>()
+                DeclarativeFileParser().parseDeclarativeFile(
+                    "${settings.settingsDir}${File.separatorChar}focus.toml",
+                    fileContents
+                )
+                    .forEach("focus", listOfProjects::add)
+                return listOfProjects.toList()
+            }
+            return if (parsedDecl.contains("focus")) {
+                parsedDecl.safeGetString("focus").split(",")
+            } else {
+                val listOfProjects = mutableListOf<String>()
+                val regex = Regex("(:[^:]*):(.*)")
+                settings.gradle.startParameter.taskNames.forEach {
+                    if (regex.matches(it)) {
+                        regex.matchEntire(it)?.groups?.get(1)?.value?.let { projectName ->
+                            println("Focusing on $projectName from task name $it")
+                            listOfProjects.add(projectName)
+                        }
                     }
                 }
+                listOfProjects.toList()
             }
-            listOfProjects.toList()
+        } else {
+            return listOf()
         }
     }
 
@@ -199,8 +193,14 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
      * @param project the Gradle's [Project] to configure
      */
     private fun configureSubProject(project: Project) {
-        if (!File(project.projectDir, "build.gradle").exists() &&
-            !File(project.projectDir, "build.gradle.kts").exists()) {
+
+        val declarativeFile = DeclarativeFileValueSource.enlist(
+            project.providers,
+            project.layout.projectDirectory.file("build.gradle.toml"),
+        )
+
+        // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
+        if (declarativeFile.isPresent) {
             project.apply(mapOf("plugin" to "com.android.experiments.declarative"))
         } else {
             println("${project.path} ignored, build files are present")
@@ -248,14 +248,6 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
      */
     private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings) {
         val dependenciesResolver = DependenciesResolver(logger)
-        // create the DAG of project dependencies, it will be easier to manipulate.
-        val dependenciesDAG = ProjectDependenciesDAG.create(
-            runBlocking {
-                dependenciesResolver.readAllProjectsDependencies(
-                    settings.settingsDir,
-                    settingsDeclarations,
-                )
-            })
 
         var includedProjectsNumber = 0
         val alreadyAddedProjects = mutableSetOf<String>()
@@ -264,6 +256,35 @@ class SettingsDeclarativePlugin: AbstractDeclarativePlugin(), Plugin<Settings> {
 
         val listOfFocusedProjects = getListOfFocusedProjects(settings, settingsDeclarations)
         if (listOfFocusedProjects.isNotEmpty()) {
+            // create the DAG of project dependencies, it will be easier to manipulate.
+            val dependenciesDAG = ProjectDependenciesDAG.create(
+                runBlocking {
+
+                    dependenciesResolver.readAllProjectsDependencies(
+                        { relativePath, fileName ->
+
+                            val settingsDir = objects.directoryProperty().also {
+                                it.set(settings.settingsDir)
+                            }
+                            val buildDir = objects.directoryProperty().also {
+                                it.set(settingsDir.dir(relativePath))
+                            }
+
+                            val declarativeFileContent = DeclarativeFileValueSource.enlist(
+                                settings.providers,
+                                buildDir.file(buildFileName),
+                            )
+
+                            val fileContents = settings.providers.fileContents(
+                                settingsDir.dir(relativePath).get().file(relativePath)
+                            )
+                            if (fileContents.asText.isPresent) {
+                                fileContents.asText.get()
+                            } else null
+                        },
+                        settingsDeclarations,
+                    )
+                })
             listOfFocusedProjects.forEach { focusedProjectPath ->
                 //println("Focusing on $focusedProjectPath -> ${mapOfDependencies[focusedProjectPath]}")
                 dependenciesDAG.getNode(focusedProjectPath)?.let { node ->

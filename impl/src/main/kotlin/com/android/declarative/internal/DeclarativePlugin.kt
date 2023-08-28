@@ -25,6 +25,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.tomlj.TomlParseResult
 import org.gradle.internal.time.Time
+import java.io.File
 import javax.inject.Inject
 
 class DeclarativePlugin @Inject constructor(
@@ -37,8 +38,21 @@ class DeclarativePlugin @Inject constructor(
     override fun apply(project: Project) {
         val issueLogger = IssueLogger(lenient = false, logger = LoggerWrapper(project.logger))
 
+        val declarativeProvider = DeclarativeFileValueSource.enlist(
+            project.providers,
+            project.layout.projectDirectory.file(buildFileName)
+        )
+        val declarativeFileContent = if (declarativeProvider.isPresent) {
+            declarativeProvider.get()
+        } else null
+
+        if (declarativeFileContent.isNullOrEmpty()) return
+
         val parsedDecl: TomlParseResult = Time.currentTimeMillis().run {
-            val parseResult = super.parseDeclarativeInFolder(project.projectDir, issueLogger)
+            val parseResult = super.parseDeclarativeFile(
+                "${project.projectDir}${File.separatorChar}$buildFileName",
+                declarativeFileContent,
+                issueLogger)
             // println("$buildFileName parsing finished in ${Time.currentTimeMillis() - this} ms")
             parseResult
         }
