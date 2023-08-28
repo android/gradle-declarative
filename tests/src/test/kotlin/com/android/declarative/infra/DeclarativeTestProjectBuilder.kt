@@ -34,7 +34,7 @@ class DeclarativeTestProjectBuilder {
             ?: throw RuntimeException("Cannot locate test directories")
         // now go up until I find the project root folder
         var path : Path? = thisClass.toURI().toPath()
-        while(path != null && path.name != "declarative-gradle") {
+        while(path != null && path.name != "gradle-declarative") {
             path = path.parent
         }
         return path?.resolve("tests/src/test-projects")

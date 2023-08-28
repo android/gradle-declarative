@@ -16,11 +16,10 @@
 
 package com.android.declarative.internal
 
-import com.android.declarative.internal.model.DependencyInfo
-import com.android.declarative.internal.model.DependencyInfo.FilesDependencyInfo
-import com.android.declarative.internal.model.DependencyInfo.MavenDependencyInfo
-import com.android.declarative.internal.model.DependencyInfo.NotationDependencyInfo
 import com.android.declarative.internal.model.DependencyType
+import com.android.declarative.internal.model.FilesDependencyInfo
+import com.android.declarative.internal.model.MavenDependencyInfo
+import com.android.declarative.internal.model.NotationDependencyInfo
 import com.android.utils.ILogger
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
@@ -29,7 +28,6 @@ import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.dsl.DependencyFactory
 import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.logging.Logger
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
