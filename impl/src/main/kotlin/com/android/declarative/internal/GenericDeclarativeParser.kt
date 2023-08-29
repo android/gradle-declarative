@@ -52,6 +52,7 @@ class GenericDeclarativeParser(
             String::class.createType(listOf(), false) to { table, key -> table.getString(key) },
             Boolean::class.createType(listOf(), false) to { table, key -> table.getBoolean(key) },
             Double::class.createType(listOf(), false) to { table, key -> table.getDouble(key) },
+            File::class.createType(listOf(), false) to { table, key -> File(table.getString(key))},
             Any::class.createType(listOf(), false) to { table, key -> table.get(key) }
         )
     }
