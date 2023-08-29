@@ -33,19 +33,16 @@ import org.mockito.junit.MockitoRule
 import org.mockito.quality.Strictness
 import org.tomlj.Toml
 
-class ProductFlavorTest {
-    @get:Rule
-    val rule: MockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS)
+class ProductFlavorTest: AgpDslTest() {
 
-    @get:Rule
-    val temporaryFolder= TemporaryFolder()
-
-    val project by lazy {
-        ProjectBuilder.builder().build()
-    }
-
-    @Mock
+    @Mock(strictness = Mock.Strictness.STRICT_STUBS)
     lateinit var extension: ApplicationExtension
+
+    @Mock(strictness = Mock.Strictness.STRICT_STUBS)
+    lateinit var demoFlavor: ApplicationProductFlavor
+
+    @Mock(strictness = Mock.Strictness.STRICT_STUBS)
+    lateinit var fullFlavor: ApplicationProductFlavor
 
     @Test
     fun testSetDimension() {
@@ -73,8 +70,6 @@ class ProductFlavorTest {
                 as NamedDomainObjectContainer<out ApplicationProductFlavor>
         Mockito.`when`(extension.flavorDimensions).thenReturn(flavorDimensions)
         Mockito.`when`(extension.productFlavors).thenReturn(flavorContainer)
-        val demoFlavor = Mockito.mock(ApplicationProductFlavor::class.java)
-        val fullFlavor = Mockito.mock(ApplicationProductFlavor::class.java)
         Mockito.`when`(flavorContainer.maybeCreate("demo")).thenReturn(demoFlavor)
         Mockito.`when`(flavorContainer.maybeCreate("full")).thenReturn(fullFlavor)
         val toml = Toml.parse(

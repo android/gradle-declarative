@@ -41,14 +41,7 @@ import java.io.File
 import java.lang.RuntimeException
 import java.util.logging.Logger
 
-class BuildTypeTest {
-    @get:Rule
-    val rule: MockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS)
-
-    @get:Rule
-    val temporaryFolder= TemporaryFolder()
-
-    lateinit var project: Project
+class BuildTypeTest: AgpDslTest() {
 
     @Mock
     lateinit var extension: ApplicationExtension
@@ -61,18 +54,6 @@ class BuildTypeTest {
 
     @Mock
     lateinit var staging: ApplicationBuildType
-
-    @Before
-    fun setup() {
-        File(temporaryFolder.root, "gradle.properties").writeText(
-            """
-                org.gradle.logging.level=debug
-            """.trimIndent()
-        )
-        project = ProjectBuilder.builder()
-            .withProjectDir(temporaryFolder.root)
-            .build()
-    }
 
     @Test
     fun testInvalidDeclaration() {
