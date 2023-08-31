@@ -10,8 +10,6 @@ import com.android.build.api.dsl.BundleLanguage
 import com.android.build.api.dsl.BundleTexture
 import com.android.build.api.dsl.SigningConfig
 import com.android.declarative.internal.GenericDeclarativeParser
-import org.gradle.testfixtures.ProjectBuilder
-import org.junit.Before
 import org.junit.Test
 
 import org.mockito.Mock

@@ -21,9 +21,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
-import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
-import kotlin.reflect.javaType
 import kotlin.reflect.jvm.javaType
 import kotlin.reflect.jvm.jvmErasure
 

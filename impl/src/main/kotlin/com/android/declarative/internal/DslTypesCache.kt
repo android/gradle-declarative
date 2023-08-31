@@ -22,7 +22,7 @@ import kotlin.reflect.KClass
 /**
  * Maintains all the [DslTypeResult] for already visited DSL types.
  */
-class DslTypesCache {
+class DslTypesCache() {
 
     val cache = mutableListOf<DslTypeResult<*>>()
 
