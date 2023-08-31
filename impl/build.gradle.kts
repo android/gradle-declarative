@@ -33,9 +33,9 @@ dependencies {
 	implementation(libs.coroutines)
 	implementation(libs.toolsCommon)
 	implementation(libs.declarativeModel)
+	implementation(libs.agpApi)
 
 	testImplementation(libs.junit)
 	testImplementation(libs.mockito)
-	testImplementation(libs.agpApi)
 	testImplementation(libs.truth)
 }

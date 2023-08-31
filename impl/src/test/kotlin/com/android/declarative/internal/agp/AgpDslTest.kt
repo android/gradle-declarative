@@ -18,7 +18,6 @@ abstract class AgpDslTest {
     val temporaryFolder= TemporaryFolder()
 
     lateinit var project: Project
-
     @Before
     fun setup() {
         File(temporaryFolder.root, "gradle.properties").writeText(
@@ -30,4 +29,5 @@ abstract class AgpDslTest {
             .withProjectDir(temporaryFolder.root)
             .build()
     }
+
 }
