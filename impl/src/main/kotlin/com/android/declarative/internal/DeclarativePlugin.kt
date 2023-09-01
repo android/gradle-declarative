@@ -141,7 +141,8 @@ class DeclarativePlugin @Inject constructor(
         issueLogger: IssueLogger
     ) {
         if (!parsedToml.isTable(topLevelDeclaration)) {
-            throw Error("Invalid declaration, $topLevelDeclaration must be a TOML table")
+            issueLogger.logger.warning("Invalid declaration, $topLevelDeclaration must be a TOML table")
+            return
         }
         // find the extension registered under the name
         val publicExtensionType = project.extensions.extensionsSchema.first {

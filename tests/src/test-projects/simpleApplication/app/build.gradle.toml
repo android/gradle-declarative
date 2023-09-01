@@ -8,5 +8,5 @@ namespace = "com.example.app"
 [android.defaultConfig]
 minSdk = 21
 
-[androidComponents.beforeVariants.debug]
+[androidComponents."beforeVariants.release"]
 enable = false

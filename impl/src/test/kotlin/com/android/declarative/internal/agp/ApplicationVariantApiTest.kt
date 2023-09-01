@@ -54,7 +54,7 @@ class ApplicationVariantApiTest: AgpDslTest() {
     }
 
     @Test
-    fun testApplicationVariantEnable() {
+    fun testVariantApplicationId() {
 
         Mockito.`when`(selector.withName("debug")).thenReturn(selector)
         @Suppress("UNCHECKED_CAST")

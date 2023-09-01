@@ -267,7 +267,7 @@ class SettingsDeclarativePlugin @Inject constructor(
                                 it.set(settings.settingsDir)
                             }
                             val buildDir = objects.directoryProperty().also {
-                                it.set(settingsDir.dir(relativePath))
+                                it.set(settingsDir.dir(relativePath.substring(1)))
                             }
 
                             val declarativeFileContent = DeclarativeFileValueSource.enlist(
@@ -275,11 +275,8 @@ class SettingsDeclarativePlugin @Inject constructor(
                                 buildDir.file(buildFileName),
                             )
 
-                            val fileContents = settings.providers.fileContents(
-                                settingsDir.dir(relativePath).get().file(relativePath)
-                            )
-                            if (fileContents.asText.isPresent) {
-                                fileContents.asText.get()
+                            if (declarativeFileContent.isPresent) {
+                                declarativeFileContent.get()
                             } else null
                         },
                         settingsDeclarations,

@@ -73,6 +73,16 @@ class AndroidComponentsParser(
         }
     }
 
+    /**
+     * Handle a Variant API callback style pf declarations.
+     *
+     * @param table the toml declarations
+     * @param typedExtension the type of the Variant API we are dealing with (Application, Library, etc...)
+     * @param variantApiName callback name like 'onVariants' or 'beforeVariants'
+     * @param variantApiType type of instance passed to the Variant API callback so for 'onVariants', it's
+     * ApplicationVariant (if dealing with an application) while for 'beforeVariants`, it's ApplicationVariantBuilder.
+     * @param action lambda function to register callbacks on [typedExtension] for each target variants.
+     */
     private fun handleCallback(
         table: TomlTable,
         typedExtension: AndroidComponentsExtension<*, *, *>,
