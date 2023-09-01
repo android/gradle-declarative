@@ -4,5 +4,5 @@ includes = [ ":app", ":lib" ]
 
 [[plugins]]
 module = "com.android.tools.build:gradle"
-version = "8.2.0-dev"
+version = "8.3.0-dev"
 
