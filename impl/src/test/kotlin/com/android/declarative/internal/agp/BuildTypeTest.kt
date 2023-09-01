@@ -18,24 +18,17 @@ package com.android.declarative.internal.agp
 
 import com.android.build.api.dsl.ApplicationBuildType
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.ProductFlavor
 import com.android.declarative.internal.AbstractDeclarativePlugin
 import com.android.declarative.internal.GenericDeclarativeParser
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.JdkLoggerWrapper
 import com.google.common.truth.Truth
 import org.gradle.api.NamedDomainObjectContainer
-import org.gradle.api.Project
-import org.gradle.testfixtures.ProjectBuilder
 import org.junit.Assert.assertThrows
-import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.mockito.Mock
 import org.mockito.Mockito
-import org.mockito.junit.MockitoJUnit
-import org.mockito.junit.MockitoRule
-import org.mockito.quality.Strictness
 import org.tomlj.Toml
 import java.io.File
 import java.lang.RuntimeException
@@ -64,7 +57,7 @@ class BuildTypeTest: AgpDslTest() {
             [android.buildTypes.debug.minifyEnabled]
         """.trimIndent()
         )
-        val plugin = object: AbstractDeclarativePlugin() {
+        val plugin = object : AbstractDeclarativePlugin() {
             override val buildFileName: String
                 get() = "build.gradle.toml"
         }

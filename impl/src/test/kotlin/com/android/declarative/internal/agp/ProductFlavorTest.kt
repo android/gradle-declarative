@@ -18,19 +18,14 @@ package com.android.declarative.internal.agp
 
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.ApplicationProductFlavor
+import com.android.build.api.dsl.ProductFlavor
 import com.android.declarative.internal.GenericDeclarativeParser
 import com.google.common.truth.Truth
 import org.gradle.api.NamedDomainObjectContainer
-import org.gradle.testfixtures.ProjectBuilder
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.Mockito.times
-import org.mockito.junit.MockitoJUnit
-import org.mockito.junit.MockitoRule
-import org.mockito.quality.Strictness
 import org.tomlj.Toml
 
 class ProductFlavorTest: AgpDslTest() {
@@ -54,7 +49,7 @@ class ProductFlavorTest: AgpDslTest() {
             flavorDimensions = [ "version" ]
         """.trimIndent()
         )
-        GenericDeclarativeParser(project).parse(
+        GenericDeclarativeParser(project = project).parse(
             toml.getTable("android")!!,
             ApplicationExtension::class,
             extension
@@ -88,7 +83,7 @@ class ProductFlavorTest: AgpDslTest() {
             versionNameSuffix="-full"
         """.trimIndent()
         )
-        GenericDeclarativeParser(project).parse(
+        GenericDeclarativeParser(project = project).parse(
             toml.getTable("android")!!,
             ApplicationExtension::class,
             extension

@@ -16,8 +16,10 @@
 
 package com.android.declarative.internal
 
+import com.android.build.api.variant.AndroidComponentsExtension
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.configurationcache.extensions.capitalized
 import org.tomlj.TomlArray
 import org.tomlj.TomlTable
@@ -43,7 +45,7 @@ class GenericDeclarativeParser(
     private val project: Project,
     private val issueLogger: IssueLogger =
         IssueLogger(false, LoggerWrapper(project.logger)),
-) {
+) : DeclarativeFileParser {
     companion object {
 
         private val tableExtractors = mapOf<KType, (table: TomlTable, key: String) -> Any?>(
@@ -130,7 +132,7 @@ class GenericDeclarativeParser(
     private val cache = DslTypesCache()
     private val contexts = ArrayDeque<Context>()
 
-    fun <T : Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
+    override fun <T : Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
 
         val dslTypeResult: DslTypeResult<Any> = cache.getCache(type)
 
@@ -186,6 +188,21 @@ class GenericDeclarativeParser(
                                 contexts.removeLast()
                             }
                         }
+                    } else  if (subExtensionObject is Property<*>) {
+                        // Gradle properties only have one parameter type. We can retrieve it from the property
+                        // declaration on the extension type we are parsing for.
+                        if (property.returnType.arguments.size != 1) {
+                            throw RuntimeException("org.gradle.api.provider.Property " +
+                                    "are supposed to have only one parameter type.")
+                        }
+                        val propertyType = property.returnType.arguments[0]
+                        tableExtractors.get(propertyType.type)?.invoke(table, tableKey)?.let { valueFromToml ->
+                            logger.LOG {
+                                "O: $tableKey = $valueFromToml for Property $property, instance = $subExtensionObject"
+                            }
+                            (subExtensionObject as Property<Any>).set(valueFromToml)
+                        }
+
                     } else {
                         logger.LOG { "Parsing for ${property.returnType.jvmErasure}" }
                         when (val value = table.get(tableKey)) {
