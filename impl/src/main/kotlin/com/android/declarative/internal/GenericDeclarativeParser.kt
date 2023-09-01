@@ -16,6 +16,7 @@
 
 package com.android.declarative.internal
 
+import com.android.build.api.variant.AndroidComponentsExtension
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.provider.Property

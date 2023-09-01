@@ -58,13 +58,13 @@ class LibraryVariantApiTest : AgpDslTest() {
 
         Mockito.`when`(selector.withName("debug")).thenReturn(selector)
         @Suppress("UNCHECKED_CAST")
-        val namespaceProperty = Mockito.mock(Property::class.java) as Property<String>
-        Mockito.`when`(variant.namespace).thenReturn(namespaceProperty)
+        val pseudoLocalesEnabledProperty = Mockito.mock(Property::class.java) as Property<Boolean>
+        Mockito.`when`(variant.pseudoLocalesEnabled).thenReturn(pseudoLocalesEnabledProperty)
 
         val toml = Toml.parse(
             """
             [androidComponents."onVariants.debug"]
-            namespace = "some.lib"
+            pseudoLocalesEnabled = true
         """.trimIndent()
         )
         AndroidComponentsParser(project).parse(
@@ -73,7 +73,7 @@ class LibraryVariantApiTest : AgpDslTest() {
             extension
         )
         Mockito.verify(selector).withName("debug")
-        Mockito.verify(variant).namespace
-        Mockito.verify(namespaceProperty).set("some.lib")
+        Mockito.verify(variant).pseudoLocalesEnabled
+        Mockito.verify(pseudoLocalesEnabledProperty).set(true)
     }
 }
