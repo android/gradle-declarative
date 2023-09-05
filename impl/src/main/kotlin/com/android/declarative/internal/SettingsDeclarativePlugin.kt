@@ -272,7 +272,7 @@ class SettingsDeclarativePlugin @Inject constructor(
 
                             val declarativeFileContent = DeclarativeFileValueSource.enlist(
                                 settings.providers,
-                                buildDir.file(buildFileName),
+                                buildDir.file(fileName),
                             )
 
                             if (declarativeFileContent.isPresent) {
