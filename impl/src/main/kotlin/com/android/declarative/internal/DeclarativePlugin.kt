@@ -141,13 +141,13 @@ class DeclarativePlugin @Inject constructor(
         issueLogger: IssueLogger
     ) {
         if (!parsedToml.isTable(topLevelDeclaration)) {
-            issueLogger.logger.warning("Invalid declaration, $topLevelDeclaration must be a TOML table")
-            return
+            throw Error("Invalid declaration, $topLevelDeclaration must be a TOML table")
         }
         // find the extension registered under the name
-        val publicExtensionType = project.extensions.extensionsSchema.first {
+        val publicExtensionType = project.extensions.extensionsSchema.firstOrNull() {
             it.name == topLevelDeclaration
-        }.publicType
+        }?.publicType
+            ?: throw Error("Cannot find top level key $topLevelDeclaration in ")
 
         issueLogger.logger.LOG { "Extension type is $publicExtensionType" }
         project.extensions.findByName(topLevelDeclaration)?.also { extension ->

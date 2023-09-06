@@ -202,11 +202,11 @@ class LargeDeclarativeTest {
             }.toString()
         )
 
-      File(project.projectDir, "gradle.properties").writeText(
-        StringBuilder().also { builder ->
-          builder.append("""org.gradle.jvmargs=-Xmx6096m""")
-        }.toString()
-      )
+        File(project.projectDir, "gradle.properties").writeText(
+            """org.gradle.jvmargs=-Xmx6096m"""
+        )
+
+        addGradleWrapper(project.projectDir)
 
         project.executor().run("assembleDebug")
     }
