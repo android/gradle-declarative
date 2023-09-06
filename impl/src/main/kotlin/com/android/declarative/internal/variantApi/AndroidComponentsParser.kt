@@ -8,10 +8,8 @@ import com.android.declarative.internal.DeclarativeFileParser
 import com.android.declarative.internal.GenericDeclarativeParser
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.LoggerWrapper
-import com.android.declarative.internal.toml.forEachKey
 import org.gradle.api.Project
 import org.tomlj.TomlTable
-import java.util.regex.Pattern
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.jvm.jvmErasure
@@ -99,7 +97,7 @@ class AndroidComponentsParser(
                     throw RuntimeException(
                         """
                             When invoking the beforeVariants/onVariants API, you must always provide a 
-                            variant names, or `all` to target all variants. 
+                            variant name, or `all` to target all variants. 
                             
                             For example, instead of 
                                 [androidComponents.beforeVariants]
@@ -108,7 +106,7 @@ class AndroidComponentsParser(
                             To target all variants, you must do 
                                 [androidComponents.beforeVariants.all]
                                 enable = false
-                            To target a variant by its name VARIANT_NAME, you must do 
+                            To target a variant by its VARIANT_NAME name, you must do 
                                 [androidComponents.beforeVariants.VARIANT_NAME]
                                 enable = false
                         """.trimIndent()

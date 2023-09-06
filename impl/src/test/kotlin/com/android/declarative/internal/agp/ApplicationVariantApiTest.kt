@@ -62,7 +62,6 @@ class ApplicationVariantApiTest: AgpDslTest() {
     @Test(expected = RuntimeException::class)
     fun testNoVariantName() {
 
-        val selector = FakeSelector()
         val extension: AndroidComponentsExtension<ApplicationExtension, ApplicationVariantBuilder, ApplicationVariant> by lazy {
             FakeAndroidComponentsExtension(
                 selector,
@@ -87,7 +86,6 @@ class ApplicationVariantApiTest: AgpDslTest() {
     @Test(expected = RuntimeException::class)
     fun testNoVariantNameWithMultipleValues() {
 
-        val selector = FakeSelector()
         val extension: AndroidComponentsExtension<ApplicationExtension, ApplicationVariantBuilder, ApplicationVariant> by lazy {
             FakeAndroidComponentsExtension(
                 selector,
@@ -113,7 +111,6 @@ class ApplicationVariantApiTest: AgpDslTest() {
     @Test
     fun testBeforeVariantsWithAllVariants() {
 
-        val selector = FakeSelector()
         val debugVariantBuilder = Mockito.mock(ApplicationVariantBuilder::class.java)
         val debugVariant = Mockito.mock(ApplicationVariant::class.java)
         val releaseVariantBuilder = Mockito.mock(ApplicationVariantBuilder::class.java)
@@ -145,7 +142,6 @@ class ApplicationVariantApiTest: AgpDslTest() {
     @Test
     fun testOnVariantsWithAllVariants() {
 
-        val selector = FakeSelector()
         val debugVariantBuilder = Mockito.mock(ApplicationVariantBuilder::class.java)
         val debugVariant = Mockito.mock(ApplicationVariant::class.java)
         @Suppress("UNCHECKED_CAST")
@@ -187,7 +183,6 @@ class ApplicationVariantApiTest: AgpDslTest() {
     @Test
     fun testWithMultipleVariants() {
 
-        val selector = FakeSelector()
         val debugOneVariantBuilder = Mockito.mock(ApplicationVariantBuilder::class.java)
         val debugOneVariant = Mockito.mock(ApplicationVariant::class.java)
         @Suppress("UNCHECKED_CAST")
