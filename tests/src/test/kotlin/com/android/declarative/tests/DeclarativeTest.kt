@@ -28,6 +28,5 @@ private fun File.maybeCreateFolder() {
 
 private fun File.maybeCopy(destination: File) {
     if (exists()) return
-    println("Copying $name to ${destination.absolutePath}")
     Files.copy(toPath(), destination.toPath())
 }
