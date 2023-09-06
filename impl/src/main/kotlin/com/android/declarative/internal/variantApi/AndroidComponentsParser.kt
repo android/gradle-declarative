@@ -8,8 +8,10 @@ import com.android.declarative.internal.DeclarativeFileParser
 import com.android.declarative.internal.GenericDeclarativeParser
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.LoggerWrapper
+import com.android.declarative.internal.toml.forEachKey
 import org.gradle.api.Project
 import org.tomlj.TomlTable
+import java.util.regex.Pattern
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.jvm.jvmErasure
@@ -91,19 +93,40 @@ class AndroidComponentsParser(
         action: (tomlDeclaration: TomlTable, variantApiType: KType, selector: VariantSelector?) -> Unit
     ) {
         // let's look at setting that applies to all variants.
-        table.getTable(variantApiName)?.let {
-            action(it, variantApiType, null)
-        }
+        table.getTable(variantApiName)?.let { variantNames ->
+            variantNames.keySet().forEach { variantName ->
+                if (!variantNames.isTable(variantName)) {
+                    throw RuntimeException(
+                        """
+                            When invoking the beforeVariants/onVariants API, you must always provide a 
+                            variant names, or `all` to target all variants. 
+                            
+                            For example, instead of 
+                                [androidComponents.beforeVariants]
+                                enable = false
 
-        // and now let's look for dotted keys with variant name embedded.
-        table.entrySet()
-            .filter { entry -> entry.key.startsWith(variantApiName) }
-            .forEach { entry ->
-                entry.value?.let {
-                    val variantName = entry.key.substring(variantApiName.length + 1)
-                    action(it as TomlTable, variantApiType, typedExtension.selector().withName(variantName) )
+                            To target all variants, you must do 
+                                [androidComponents.beforeVariants.all]
+                                enable = false
+                            To target a variant by its name VARIANT_NAME, you must do 
+                                [androidComponents.beforeVariants.VARIANT_NAME]
+                                enable = false
+                        """.trimIndent()
+                    )
+                }
+                variantNames.getTable(variantName)?.let {
+                    action(
+                        it,
+                        variantApiType,
+                        if (variantName.equals("all")) {
+                            typedExtension.selector().all()
+                        } else {
+                            typedExtension.selector().withName(variantName)
+                        }
+                    )
                 }
             }
+        }
     }
 
     private fun parse(tomlDeclaration: TomlTable, variantBuilder: VariantBuilder, variantBuilderType: KType) {
