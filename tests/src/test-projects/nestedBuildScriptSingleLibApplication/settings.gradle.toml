@@ -1,0 +1,8 @@
+include = [ ":app", ":lib" ]
+
+[[pluginsManagement.repositories.inheritSettings]]
+
+[[plugins]]
+module = "com.android.tools.build:gradle"
+version = "8.3.0-dev"
+

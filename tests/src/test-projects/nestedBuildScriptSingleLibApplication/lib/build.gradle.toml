@@ -1,0 +1,10 @@
+includeBuildFiles = ["../toml/common.toml"]
+
+[[plugins]]
+id = "com.android.library"
+
+[android]
+namespace = "com.example.helloworld"
+
+[android.defaultConfig]
+minSdk = 21

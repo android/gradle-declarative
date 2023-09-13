@@ -43,6 +43,7 @@ import kotlin.reflect.jvm.jvmErasure
  */
 class GenericDeclarativeParser(
     private val project: Project,
+    private val cache: DslTypesCache = DslTypesCache(),
     private val issueLogger: IssueLogger =
         IssueLogger(false, LoggerWrapper(project.logger)),
 ) : DeclarativeFileParser {
@@ -129,7 +130,6 @@ class GenericDeclarativeParser(
     }
 
 
-    private val cache = DslTypesCache()
     private val contexts = ArrayDeque<Context>()
 
     override fun <T : Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {

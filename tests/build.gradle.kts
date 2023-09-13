@@ -37,4 +37,5 @@ dependencies {
 	testImplementation(libs.truth)
 	testImplementation(libs.testutils)
 	testImplementation(libs.testFramework)
+	testImplementation(libs.toolsCommon)
 }

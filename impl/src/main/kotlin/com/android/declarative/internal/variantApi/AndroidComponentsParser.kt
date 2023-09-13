@@ -5,6 +5,7 @@ import com.android.build.api.variant.Variant
 import com.android.build.api.variant.VariantBuilder
 import com.android.build.api.variant.VariantSelector
 import com.android.declarative.internal.DeclarativeFileParser
+import com.android.declarative.internal.DslTypesCache
 import com.android.declarative.internal.GenericDeclarativeParser
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.LoggerWrapper
@@ -20,8 +21,8 @@ import kotlin.reflect.jvm.jvmErasure
  */
 class AndroidComponentsParser(
     private val project: Project,
-    private val issueLogger: IssueLogger =
-        IssueLogger(false, LoggerWrapper(project.logger)),
+    private val cache: DslTypesCache = DslTypesCache(),
+    private val issueLogger: IssueLogger = IssueLogger(false, LoggerWrapper(project.logger)),
 ): DeclarativeFileParser {
 
     override fun <T: Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
@@ -107,12 +108,12 @@ class AndroidComponentsParser(
     }
 
     private fun parse(tomlDeclaration: TomlTable, variantBuilder: VariantBuilder, variantBuilderType: KType) {
-        GenericDeclarativeParser(project, issueLogger)
+        GenericDeclarativeParser(project, cache, issueLogger)
             .parse(tomlDeclaration, variantBuilderType.jvmErasure, variantBuilder)
     }
 
     private fun parse(tomlDeclaration: TomlTable, variant: Variant, variantType: KType) {
-        GenericDeclarativeParser(project, issueLogger)
+        GenericDeclarativeParser(project, cache, issueLogger)
             .parse(tomlDeclaration, variantType.jvmErasure, variant)
     }
 }
