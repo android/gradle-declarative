@@ -186,7 +186,7 @@ class LargeDeclarativeTest {
                 module = "com.android.tools.build:gradle" 
                 version = "8.0.0"
 
-                [includes]
+                [include]
 
                 """.trimIndent())
 

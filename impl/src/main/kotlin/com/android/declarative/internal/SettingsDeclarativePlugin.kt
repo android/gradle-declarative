@@ -297,7 +297,7 @@ class SettingsDeclarativePlugin @Inject constructor(
         } else {
             // add included sub projects, which can be expressed as a Table
             // or as array of strings.
-            settingsDeclarations.forEach("includes") { projectName ->
+            settingsDeclarations.forEach("include") { projectName ->
                 //println("Including `$projectName` project")
                 settings.include(projectName)
                 includedProjectsNumber++
@@ -305,7 +305,7 @@ class SettingsDeclarativePlugin @Inject constructor(
         }
         println("Calculated transitive dependencies in ${System.currentTimeMillis() - transitiveDependenciesStartTime}")
         var totalProjectsNumber = 0
-        settingsDeclarations.forEach("includes") {
+        settingsDeclarations.forEach("include") {
             totalProjectsNumber++
         }
         println("Included $includedProjectsNumber projects, discarded ${totalProjectsNumber - includedProjectsNumber}")
