@@ -86,7 +86,7 @@ plugins {
             module = "com.android.tools.build:gradle" 
             version = "7.4.0"
 
-            [includes]
+            [include]
             app = ":app"
             javaLib = ":javaLib"
 

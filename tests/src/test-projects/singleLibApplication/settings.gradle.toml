@@ -1,4 +1,4 @@
-includes = [ ":app", ":lib" ]
+include = [ ":app", ":lib" ]
 
 [[pluginsManagement.repositories.inheritSettings]]
 
