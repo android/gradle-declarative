@@ -80,6 +80,9 @@ class LargeDeclarativeTest {
                         [android.defaultConfig]
                         minSdk = 21
 
+                        [dependencies]
+                        implementation = [
+                        
                         """.trimIndent()
                     )
                     val alreadyAllocated = mutableListOf<Int>()
@@ -89,7 +92,7 @@ class LargeDeclarativeTest {
                             nextIndex = random.nextInt(nbOfAndroidLibs)
                         }
                         alreadyAllocated.add(nextIndex)
-                        builder.append("[dependencies.implementation.lib$nextIndex]\n")
+                        builder.append("    { project = \":lib$nextIndex\" },\n")
                     }
                     alreadyAllocated.clear()
                     repeat(nbOfJavaLibsDependenciesPerApp) { _ ->
@@ -98,8 +101,9 @@ class LargeDeclarativeTest {
                             nextIndex = random.nextInt(nbOfJavaLibs)
                         }
                         alreadyAllocated.add(nextIndex)
-                        builder.append("[dependencies.implementation.javaLib$nextIndex]\n")
+                        builder.append("    { project = \":javaLib$nextIndex\" },\n")
                     }
+                    builder.append("]\n")
                 }.toString()
             )
             app.buildFile.delete()
@@ -120,6 +124,8 @@ class LargeDeclarativeTest {
                         [android.defaultConfig]
                         minSdk = 21
 
+                        [dependencies]
+                        implementation = [
                         """.trimIndent())
                     val alreadyAllocated = mutableListOf<Int>()
                     repeat(nbOfJavaLibsDependenciesPerAndroidLib) { _ ->
@@ -128,8 +134,9 @@ class LargeDeclarativeTest {
                             nextIndex = random.nextInt(nbOfJavaLibs)
                         }
                         alreadyAllocated.add(nextIndex)
-                        builder.append("[dependencies.implementation.javaLib$nextIndex]\n")
+                        builder.append("    { project = \":javaLib$nextIndex\" },\n")
                     }
+                    builder.append("]\n")
                 }.toString()
             )
             androidLib.buildFile.delete()
@@ -179,12 +186,12 @@ class LargeDeclarativeTest {
                 [[plugins]]
                 id = "com.android.application"
                 module = "com.android.tools.build:gradle" 
-                version = "8.0.0"
+                version = "8.3.0-dev"
 
                 [[plugins]]
                 id = "com.android.library"
                 module = "com.android.tools.build:gradle" 
-                version = "8.0.0"
+                version = "8.3.0-dev"
 
                 [include]
 

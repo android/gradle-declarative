@@ -83,7 +83,10 @@ class JavaLibraryDeclarativeTest {
             [android.defaultConfig]
             minSdk = 21
 
-            [dependencies.implementation.javaLib]
+            [dependencies]
+            implementation = [
+                { project = ":javaLib" }, 
+            ]
         """.trimIndent())
         app.buildFile.writeText(
             """

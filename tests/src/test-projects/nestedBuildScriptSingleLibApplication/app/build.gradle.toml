@@ -10,4 +10,7 @@ namespace = "com.example.app"
 [android.defaultConfig]
 minSdk = 21
 
-[dependencies.implementation.lib]
+[dependencies]
+implementation = [
+    { project = ":lib" }
+]

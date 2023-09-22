@@ -1,6 +1,7 @@
 include = [ ":app", ":lib" ]
 
-[[pluginsManagement.repositories.inheritSettings]]
+[pluginManagement.repositories]
+inheritSettings = true
 
 [[plugins]]
 module = "com.android.tools.build:gradle"

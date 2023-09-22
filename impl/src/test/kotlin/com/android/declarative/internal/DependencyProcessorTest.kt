@@ -16,10 +16,10 @@
 
 package com.android.declarative.internal
 
+import com.android.declarative.internal.model.DependencyInfo.Files
+import com.android.declarative.internal.model.DependencyInfo.Maven
+import com.android.declarative.internal.model.DependencyInfo.Notation
 import com.android.declarative.internal.model.DependencyType
-import com.android.declarative.internal.model.FilesDependencyInfo
-import com.android.declarative.internal.model.MavenDependencyInfo
-import com.android.declarative.internal.model.NotationDependencyInfo
 import com.android.utils.ILogger
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
@@ -37,7 +37,6 @@ import org.mockito.Mockito.times
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
 import org.mockito.quality.Strictness
-import org.tomlj.Toml
 
 @Suppress("UnstableApiUsage")
 class DependencyProcessorTest {
@@ -65,7 +64,7 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
         val dependency = createSubProjectAndWireDependency(":lib1")
         val dependencies = listOf(
-            NotationDependencyInfo(
+            Notation(
                 DependencyType.PROJECT,
                 "implementation",
                 ":lib1"
@@ -83,12 +82,12 @@ class DependencyProcessorTest {
         val dependency1 = createSubProjectAndWireDependency(":lib1")
         val dependency2 = createSubProjectAndWireDependency(":lib2")
         val dependencies = listOf(
-            NotationDependencyInfo(
+            Notation(
                 DependencyType.PROJECT,
                 "implementation",
                 ":lib1"
             ),
-            NotationDependencyInfo(
+            Notation(
                 DependencyType.PROJECT,
                 "testImplementation",
                 ":lib2"
@@ -105,7 +104,7 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
         val dependency = createExternalDependency("org.mockito:mockito-core:4.8.0")
         val dependencies = listOf(
-            NotationDependencyInfo(
+            Notation(
                 DependencyType.NOTATION,
                 configuration = "implementation",
                 notation = "org.mockito:mockito-core:4.8.0",
@@ -121,7 +120,7 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
         val dependency = createExternalDependency("org.mockito", "mockito-core", "4.8.0")
         val dependencies = listOf(
-            MavenDependencyInfo(
+            Maven(
                 configuration = "implementation",
                 group = "org.mockito",
                 name = "mockito-core",
@@ -138,22 +137,14 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
         val dependency1 = createExternalDependency("org.mockito", "mockito-core", "4.8.0")
         val dependency2 = createExternalDependency("org.junit", "junit", "5.7.0")
-
-        val toml = Toml.parse(
-            """
-            [dependencies.testImplementation]
-            mockito = { group = "org.mockito", name = "mockito-core", version = "4.8.0" }
-            junit = { group = "org.junit", name = "junit", version = "5.7.0" }
-        """.trimIndent()
-        )
         val dependencies = listOf(
-            MavenDependencyInfo(
+            Maven(
                 configuration = "testImplementation",
                 group = "org.mockito",
                 name = "mockito-core",
                 version = "4.8.0",
             ),
-            MavenDependencyInfo(
+            Maven(
                 configuration = "testImplementation",
                 group = "org.junit",
                 name = "junit",
@@ -171,7 +162,7 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
         val dependency = createExternalDependency("libs.junit")
         val dependencies = listOf(
-            NotationDependencyInfo(
+            Notation(
                 DependencyType.NOTATION,
                 "implementation",
                 "libs.junit"
@@ -198,11 +189,11 @@ class DependencyProcessorTest {
             )
         }
         val dependencies = listOf(
-            FilesDependencyInfo(
+            Files(
                 "implementation",
                 listOf("local.jar")
             ),
-            FilesDependencyInfo(
+            Files(
                 "implementation",
                 listOf("some.jar", "something.else", "final.one")
             )
@@ -221,17 +212,17 @@ class DependencyProcessorTest {
         val parser = createDependenciesParser()
 
         val dependencies = listOf(
-            NotationDependencyInfo(
+            Notation(
                 type = DependencyType.PROJECT,
                 configuration = "implementation",
                 notation = ":lib1"
             ),
-            NotationDependencyInfo(
+            Notation(
                 type = DependencyType.PROJECT,
                 configuration = "implementation",
                 notation = ":lib2"
             ),
-            NotationDependencyInfo(
+            Notation(
                 type = DependencyType.PROJECT,
                 configuration = "implementation",
                 notation = ":lib3"
