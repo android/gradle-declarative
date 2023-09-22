@@ -13,14 +13,14 @@ import com.android.build.api.variant.VariantExtensionConfig
 import com.android.build.api.variant.VariantSelector
 import org.gradle.api.Action
 
-@Suppress("UnstableApiUsage")
+open @Suppress("UnstableApiUsage")
 class FakeAndroidComponentsExtension<
         CommonExtensionT: CommonExtension<*, *, *, *, *>,
         VariantBuilderT: VariantBuilder,
         VariantT: Variant>(
     private val selector: VariantSelector,
-    private val variantBuilder: VariantBuilderT,
-    private val variant: VariantT,
+    private val variantBuilders: Map<String, VariantBuilderT>,
+    private val variants: Map<String, VariantT>,
 ): AndroidComponentsExtension<CommonExtensionT, VariantBuilderT, VariantT> {
 
     override val managedDeviceRegistry: ManagedDeviceRegistry
@@ -53,11 +53,21 @@ class FakeAndroidComponentsExtension<
     }
 
     override fun onVariants(selector: VariantSelector, callback: Action<VariantT>) {
-        callback.execute(variant)
+        TODO("Not yet implemented")
     }
 
     override fun onVariants(selector: VariantSelector, callback: (VariantT) -> Unit) {
-        callback(variant)
+        if (selector is FakeSelector) {
+            if (selector.selectorName == "all") {
+                variants.values.forEach(callback)
+            } else {
+                variants[selector.selectorName]?.let {
+                    callback(it)
+                } ?: throw RuntimeException("Cannot find variant ${selector.selectorName}")
+            }
+        } else {
+            variants.values.forEach(callback)
+        }
     }
 
     @Deprecated("Replaced by finalizeDsl", replaceWith = ReplaceWith("finalizeDsl(callback)"))
@@ -66,11 +76,20 @@ class FakeAndroidComponentsExtension<
     }
 
     override fun beforeVariants(selector: VariantSelector, callback: Action<VariantBuilderT>) {
-        callback.execute(variantBuilder)
-
+        TODO("Not yet implemented")
     }
 
     override fun beforeVariants(selector: VariantSelector, callback: (VariantBuilderT) -> Unit) {
-        callback(variantBuilder)
+        if (selector is FakeSelector) {
+            if (selector.selectorName == "all") {
+                variantBuilders.values.forEach(callback)
+            } else {
+                variantBuilders[selector.selectorName]?.let {
+                    callback(it)
+                } ?: throw RuntimeException("Cannot find variant ${selector.selectorName}")
+            }
+        } else {
+            variantBuilders.values.forEach(callback)
+        }
     }
 }

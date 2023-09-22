@@ -27,6 +27,8 @@ private fun File.maybeCreateFolder() {
 }
 
 private fun File.maybeCopy(destination: File) {
-    if (exists()) return
-    Files.copy(toPath(), destination.toPath())
+    File(destination, name).let { destinationFile ->
+        if (destinationFile.exists()) return
+        Files.copy(toPath(), destinationFile.toPath())
+    }
 }
