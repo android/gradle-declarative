@@ -1,0 +1,12 @@
+
+[android]
+flavorDimensions = [ "version" ]
+compileSdk = 31
+
+[android.productFlavors.paid]
+dimension="version"
+applicationIdSuffix=".paid"
+versionNameSuffix="-paid"
+
+[android.defaultConfig]
+minSdk = 19

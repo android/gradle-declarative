@@ -22,6 +22,7 @@ import com.android.declarative.internal.tasks.DeclarativeBuildSerializerTask
 import com.android.declarative.internal.variantApi.AndroidComponentsParser
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.RegularFile
 import org.tomlj.TomlParseResult
 import org.gradle.internal.time.Time
 import org.tomlj.TomlTable
@@ -37,10 +38,19 @@ class DeclarativePlugin @Inject constructor(
 
     override fun apply(project: Project) {
         val issueLogger = IssueLogger(lenient = false, logger = LoggerWrapper(project.logger))
+        val cache = DslTypesCache()
+        parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
 
+
+        project.afterEvaluate {
+            createTasks(it)
+        }
+    }
+
+    private fun parseDeclarativeBuildFile(project: Project, issueLogger: IssueLogger, buildFile: RegularFile, cache: DslTypesCache) {
         val declarativeProvider = DeclarativeFileValueSource.enlist(
             project.providers,
-            project.layout.projectDirectory.file(buildFileName)
+            buildFile
         )
         val declarativeFileContent = if (declarativeProvider.isPresent) {
             declarativeProvider.get()
@@ -64,8 +74,19 @@ class DeclarativePlugin @Inject constructor(
             }
         }
 
+        parsedDecl.getArray("includeBuildFiles")?.let {
+            val buildFileCount = it.size()
+            for (index in 0 until buildFileCount) {
+                val includedBuildFile = project.layout.projectDirectory.file(it.getString(index))
+                parseDeclarativeBuildFile(project, issueLogger,  includedBuildFile, cache)
+            }
+        }
+
         parsedDecl.keySet().forEach { topLevelDeclaration ->
             when(topLevelDeclaration) {
+                "includeBuildFiles" -> {
+                    // skip includes processing again.
+                }
                 "plugins" -> {
                     // already applied above.
                 }
@@ -77,7 +98,7 @@ class DeclarativePlugin @Inject constructor(
                     // heavy on callbacks which cannot be generically parsed.
 
                     parseTomlTable(
-                        AndroidComponentsParser(project, issueLogger),
+                        AndroidComponentsParser(project, cache, issueLogger),
                         topLevelDeclaration,
                         parsedDecl,
                         project,
@@ -86,7 +107,7 @@ class DeclarativePlugin @Inject constructor(
                 }
                 else -> {
                     parseTomlTable(
-                        GenericDeclarativeParser(project, issueLogger),
+                        GenericDeclarativeParser(project, cache, issueLogger),
                         topLevelDeclaration,
                         parsedDecl,
                         project,
@@ -105,10 +126,6 @@ class DeclarativePlugin @Inject constructor(
                 project.dependencies,
                 issueLogger,
             ).process(DependencyParser(issueLogger).parseToml(it))
-        }
-
-        project.afterEvaluate {
-            createTasks(it)
         }
     }
 

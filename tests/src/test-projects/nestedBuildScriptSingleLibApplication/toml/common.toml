@@ -1,0 +1,5 @@
+[android]
+compileSdk = 33
+
+[android.defaultConfig]
+minSdk = 21

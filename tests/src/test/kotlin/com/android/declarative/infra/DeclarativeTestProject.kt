@@ -15,6 +15,7 @@
  */
 package com.android.declarative.infra
 
+import com.android.SdkConstants
 import com.android.build.gradle.integration.common.fixture.BaseGradleExecutor
 import com.android.build.gradle.integration.common.fixture.GradleBuildResult
 import com.android.build.gradle.integration.common.fixture.GradleTaskExecutor
@@ -25,6 +26,8 @@ import com.android.build.gradle.integration.common.fixture.gradle_project.Projec
 import com.android.build.gradle.integration.common.fixture.gradle_project.initializeProjectLocation
 import com.android.build.gradle.integration.common.truth.forEachLine
 import com.android.testutils.TestUtils
+import com.android.utils.FileUtils
+import com.android.utils.combineAsCamelCase
 import com.google.common.truth.Truth
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.ProjectConnection
@@ -83,6 +86,19 @@ class DeclarativeTestProject constructor(
         }
     }
 
+    /**
+     * Create a GradleTestProject representing a subproject.
+     *
+     * @param name name of the subProject, or the subProject's gradle project path
+     */
+    fun getSubproject(name: String): DeclarativeTestProject {
+        return DeclarativeTestProject(
+            name = name,
+            testProject = DeclarativeTest(FileUtils.join(location.projectDir.path, name)),
+            mutableProjectLocation = location.createSubProjectLocation(name)
+        )
+    }
+
     override val location: ProjectLocation
         get() = mutableProjectLocation ?: error("Project location has not been initialized yet")
 
@@ -94,6 +110,27 @@ class DeclarativeTestProject constructor(
 
     val projectDir: File
         get() = location.projectDir
+
+    /** Return the output directory from Android plugins.  */
+    val outputDir: File
+        get() = FileUtils.join(projectDir, "build", SdkConstants.FD_OUTPUTS)
+
+    /** Return the output directory from Android plugins.  */
+    val intermediatesDir: File
+        get() = FileUtils
+            .join(projectDir, "build", SdkConstants.FD_INTERMEDIATES)
+
+    fun getMergedManifestFile(vararg dimensions: String) : File {
+        return FileUtils.join(intermediatesDir, "merged_manifest", dimensions.toList().combineAsCamelCase(), SdkConstants.FN_ANDROID_MANIFEST_XML)
+    }
+
+    fun getApkLocation(vararg dimensions: String) : File {
+        return FileUtils.join(outputDir, "apk", *dimensions)
+    }
+
+    fun getOutputMetadataJson(vararg dimensions: String) : File {
+        return FileUtils.join(getApkLocation(*dimensions), METADATA_FILE_NAME)
+    }
 
     override fun apply(base: Statement, description: Description): Statement {
         return object: Statement() {
@@ -173,5 +210,8 @@ class DeclarativeTestProject constructor(
             null,
             generateRepoScript()
         )
+    }
+    companion object {
+        private const val METADATA_FILE_NAME = "output-metadata.json"
     }
 }
