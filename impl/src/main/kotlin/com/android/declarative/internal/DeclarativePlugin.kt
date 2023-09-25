@@ -72,7 +72,6 @@ class DeclarativePlugin @Inject constructor(
             PluginParser().parse(plugins).forEach { pluginInfo ->
                 println("In project, applying ${pluginInfo.id}")
                 project.pluginManager.apply(pluginInfo.id)
-//                project.apply(mapOf("plugin" to pluginInfo.id))
             }
         }
 

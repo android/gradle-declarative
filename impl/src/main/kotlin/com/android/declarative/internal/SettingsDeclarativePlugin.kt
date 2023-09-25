@@ -162,8 +162,8 @@ class SettingsDeclarativePlugin @Inject constructor(
                     .forEach("focus", listOfProjects::add)
                 return listOfProjects.toList()
             }
-            if (parsedDecl.contains("focus")) {
-                return parsedDecl.safeGetString("focus").split(",")
+            parsedDecl.getString("focus")?.let{
+                return it.split(",")
             }
         }
         // fallback, focus mode is not active.
@@ -214,15 +214,10 @@ class SettingsDeclarativePlugin @Inject constructor(
                 }
                 else if (table.contains("id")) {
                     println("Adding ${table.safeGetString("id")} to project's classpath")
-                    //project.apply(mapOf("plugin" to table.safeGetString("id")))
                     project.buildscript.dependencies.add(
                         ScriptHandler.CLASSPATH_CONFIGURATION,
                         "name: ${table.safeGetString("id")}"
                     )
-//                    project.buildscript.dependencies.add(
-//                        ScriptHandler.CLASSPATH_CONFIGURATION,
-//                        table.safeGetString("id")
-//                    )
                 }
             }
             // apply declarative plugin last as it will immediately apply the project's declared plugins which
