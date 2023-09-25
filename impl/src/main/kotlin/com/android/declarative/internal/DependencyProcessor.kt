@@ -18,10 +18,12 @@
 package com.android.declarative.internal
 
 import com.android.declarative.internal.model.DependencyInfo
+import com.android.declarative.internal.model.DependencyInfo.Alias
+import com.android.declarative.internal.model.DependencyInfo.ExtensionFunction
+import com.android.declarative.internal.model.DependencyInfo.Files
+import com.android.declarative.internal.model.DependencyInfo.Maven
+import com.android.declarative.internal.model.DependencyInfo.Notation
 import com.android.declarative.internal.model.DependencyType
-import com.android.declarative.internal.model.FilesDependencyInfo
-import com.android.declarative.internal.model.MavenDependencyInfo
-import com.android.declarative.internal.model.NotationDependencyInfo
 import org.gradle.api.Project
 import org.gradle.api.artifacts.dsl.DependencyFactory
 import org.gradle.api.artifacts.dsl.DependencyHandler
@@ -42,7 +44,7 @@ class DependencyProcessor(
     fun process(dependencies: List<DependencyInfo>) {
         dependencies.forEach { dependency ->
             when(dependency) {
-                is NotationDependencyInfo -> {
+                is Notation -> {
                     if (dependency.type == DependencyType.PROJECT) {
                         addProjectDependency(
                             dependency.configuration,
@@ -54,17 +56,23 @@ class DependencyProcessor(
                         )
                     }
                 }
-                is FilesDependencyInfo -> {
+                is Files -> {
                     addFilesDependency(dependency)
                 }
-                is MavenDependencyInfo -> {
+                is Maven -> {
                     addLibraryDependency(dependency)
+                }
+                is ExtensionFunction -> {
+                    throw RuntimeException("Not Supported yet !")
+                }
+                is Alias -> {
+                    throw RuntimeException("Version catalogs not supported yet.")
                 }
             }
         }
     }
 
-    private fun addFilesDependency(dependency: FilesDependencyInfo) {
+    private fun addFilesDependency(dependency: Files) {
         val fileCollection = fileCollectionFactory()
         dependency.files.forEach(fileCollection::from)
         println("adding files dependency ${dependency.files} to ${dependency.configuration}")
@@ -76,7 +84,7 @@ class DependencyProcessor(
         )
     }
 
-    private fun addLibraryDependency(dependency: MavenDependencyInfo) {
+    private fun addLibraryDependency(dependency: Maven) {
         println("Adding maven ${dependency.name} to ${dependency.configuration}")
         dependencyHandler.add(
             dependency.configuration,
@@ -94,7 +102,7 @@ class DependencyProcessor(
         dependencyHandler.add(configurationName, dependencyFactory.create(dependencyTarget))
     }
 
-    private fun addNotationDependency(dependencyInfo: NotationDependencyInfo) {
+    private fun addNotationDependency(dependencyInfo: Notation) {
         val dependency = when(dependencyInfo.notation) {
             "localGroovy" -> dependencyFactory.localGroovy()
             "gradleApi" -> dependencyFactory.gradleApi()

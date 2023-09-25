@@ -70,7 +70,8 @@ class DeclarativePlugin @Inject constructor(
         // plugins must be applied first so extensions are correctly registered.
         parsedDecl.getArray("plugins")?.also { plugins ->
             PluginParser().parse(plugins).forEach { pluginInfo ->
-                project.apply(mapOf("plugin" to pluginInfo.id))
+                println("In project, applying ${pluginInfo.id}")
+                project.pluginManager.apply(pluginInfo.id)
             }
         }
 

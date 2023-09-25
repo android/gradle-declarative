@@ -15,10 +15,12 @@
  */
 package com.android.declarative.internal
 
+import com.android.declarative.internal.configurators.RepositoriesConfigurator
 import com.android.declarative.internal.model.ProjectDependenciesDAG
 import com.android.declarative.internal.parsers.DeclarativeFileParser
 import com.android.declarative.internal.parsers.DependenciesResolver
-import com.android.declarative.internal.toml.checkElementsPresence
+import com.android.declarative.internal.parsers.DependencyResolutionManagementParser
+import com.android.declarative.internal.parsers.PluginManagementParser
 import com.android.declarative.internal.toml.forEach
 import com.android.declarative.internal.toml.forEachTable
 import com.android.declarative.internal.toml.safeGetString
@@ -30,7 +32,6 @@ import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.internal.time.Time
 import org.tomlj.TomlParseResult
 import java.io.File
-import java.net.URL
 import java.util.logging.Logger
 import javax.inject.Inject
 import org.gradle.api.model.ObjectFactory
@@ -78,6 +79,21 @@ class SettingsDeclarativePlugin @Inject constructor(
             parseResult
         }
 
+        declareSubProjectsToGradle(settingsDeclarations, settings)
+
+        settingsDeclarations.getTable("pluginManagement")
+            ?.let { pluginManagementDeclarations ->
+                val pluginManagementInfo = PluginManagementParser(logger).parseToml(pluginManagementDeclarations)
+                // so far, we only handle pluginManagement's repositories declarations.
+                RepositoriesConfigurator(logger).apply(
+                    "pluginManagement",
+                    settings.pluginManagement.repositories,
+                    pluginManagementInfo.repositories,
+                )
+
+                pluginManagementInfo.includedBuilds.forEach(settings.pluginManagement::includeBuild)
+            }
+
         settings.pluginManagement { pluginManagement ->
             // declare our plugin version to the plugins management
             pluginManagement.plugins.id("com.android.experiments.declarative").version(Constants.PLUGIN_VERSION)
@@ -88,15 +104,27 @@ class SettingsDeclarativePlugin @Inject constructor(
                     // if the user does not specify the `id`, it means they are not interested in providing plugins
                     // versions to the plugin management and probably solely relies on classpath configuration.
                     if (table.contains("id")) {
-                        table.checkElementsPresence("plugins", "id", "version")
                         println("Applying plugin ${table.getString("id")} version ${table.getString("version")}")
-                        pluginManagement.plugins
+                        val pluginDependencySpec = pluginManagement.plugins
                             .id(table.safeGetString("id"))
-                            .version(table.safeGetString("version"))
-                            .apply(false)
+                        if (table.contains("version")) {
+                            pluginDependencySpec.version(table.safeGetString("version"))
+                        }
+
                     }
                 }
             }
+        }
+
+
+        settingsDeclarations.getTable("dependencyResolutionManagement")?.also { dependencyResolutionManagementDeclarations ->
+            val dependencyResolutionManagementInfo =
+                DependencyResolutionManagementParser(logger).parseToml(dependencyResolutionManagementDeclarations)
+            RepositoriesConfigurator(logger).apply(
+                "DependencyResolutionManagementInfo",
+                settings.dependencyResolutionManagement.repositories,
+                dependencyResolutionManagementInfo.repositories,
+            )
         }
 
         settings.gradle.beforeProject { project ->
@@ -106,10 +134,9 @@ class SettingsDeclarativePlugin @Inject constructor(
             if (project.path == ":") {
                 configureRootProject(settingsDeclarations, project)
             } else {
-                configureSubProject(project)
+                configureSubProject(settingsDeclarations, project)
             }
         }
-        declareSubProjectsToGradle(settingsDeclarations, settings)
     }
 
     private fun getListOfFocusedProjects(
@@ -135,24 +162,12 @@ class SettingsDeclarativePlugin @Inject constructor(
                     .forEach("focus", listOfProjects::add)
                 return listOfProjects.toList()
             }
-            return if (parsedDecl.contains("focus")) {
-                parsedDecl.safeGetString("focus").split(",")
-            } else {
-                val listOfProjects = mutableListOf<String>()
-                val regex = Regex("(:[^:]*):(.*)")
-                settings.gradle.startParameter.taskNames.forEach {
-                    if (regex.matches(it)) {
-                        regex.matchEntire(it)?.groups?.get(1)?.value?.let { projectName ->
-                            println("Focusing on $projectName from task name $it")
-                            listOfProjects.add(projectName)
-                        }
-                    }
-                }
-                listOfProjects.toList()
+            parsedDecl.getString("focus")?.let{
+                return it.split(",")
             }
-        } else {
-            return listOf()
         }
+        // fallback, focus mode is not active.
+        return listOf()
     }
 
     /**
@@ -163,27 +178,9 @@ class SettingsDeclarativePlugin @Inject constructor(
      * @param project the sub module's [Project]
      */
     private fun addRepositoriesToSubProject(settingsDeclarations: TomlParseResult, settings: Settings, project: Project) {
-        settingsDeclarations.getTable("pluginsManagement.repositories")?.entrySet()?.forEach {
-            if (it.key == "inheritSettings") {
-                settings.pluginManagement.repositories.forEach {
-                    println("Adding ${it.name} to project's buildscript")
-                    project.buildscript.repositories.add(it)
-                }
-            } else {
-                val repoInfo =
-                    settingsDeclarations.getTable("pluginsManagement.repositories")?.getTable(it.key)
-                        ?: throw RuntimeException("No 'url' and 'type' specified for repository `${it.key}`")
-                val repoType = repoInfo.getString("type")
-                if (repoType != "maven") {
-                    throw RuntimeException("Only maven repository are supported at this point, unsupported repository type : $repoType")
-                }
-
-                println("Adding $repoType repository named ${it.key} to project's buildscript")
-                project.buildscript.repositories.maven { repo ->
-                    repo.name = it.key
-                    repo.url = URL(repoInfo.getString("url")).toURI()
-                }
-            }
+        settings.pluginManagement.repositories.forEach {
+            println("Adding ${it.name} to project's buildscript")
+            project.buildscript.repositories.add(it)
         }
     }
 
@@ -192,7 +189,7 @@ class SettingsDeclarativePlugin @Inject constructor(
      *
      * @param project the Gradle's [Project] to configure
      */
-    private fun configureSubProject(project: Project) {
+    private fun configureSubProject(settingsDeclarations: TomlParseResult, project: Project) {
 
         val declarativeFile = DeclarativeFileValueSource.enlist(
             project.providers,
@@ -201,6 +198,30 @@ class SettingsDeclarativePlugin @Inject constructor(
 
         // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
         if (declarativeFile.isPresent) {
+            settingsDeclarations.getArray("plugins")?.forEachTable { table ->
+                // TODO : reconcile and use DependencyParser.
+                if (table.contains("module")) {
+                    val notation = if (table.contains("version")) {
+                        "${table.safeGetString("module")}:${table.safeGetString("version")}"
+                    } else {
+                        table.safeGetString("module")
+                    }
+                    println("Adding $notation to classpath")
+                    project.buildscript.dependencies.add(
+                        ScriptHandler.CLASSPATH_CONFIGURATION,
+                        notation
+                    )
+                }
+                else if (table.contains("id")) {
+                    println("Adding ${table.safeGetString("id")} to project's classpath")
+                    project.buildscript.dependencies.add(
+                        ScriptHandler.CLASSPATH_CONFIGURATION,
+                        "name: ${table.safeGetString("id")}"
+                    )
+                }
+            }
+            // apply declarative plugin last as it will immediately apply the project's declared plugins which
+            // are probably added to the classpath right above.
             project.apply(mapOf("plugin" to "com.android.experiments.declarative"))
         } else {
             println("${project.path} ignored, build files are present")
@@ -226,14 +247,27 @@ class SettingsDeclarativePlugin @Inject constructor(
                 // buildscript classpath, it just applies it (assuming it is already in the classpath).
                 println("Configuring root project")
                 project.buildscript.dependencies.also { dependencyHandler ->
-            settingsDeclarations.getArray("plugins")?.forEachTable { table ->
-                table.checkElementsPresence("plugins", "module", "version")
-                val notation = "${table.safeGetString("module")}:${table.safeGetString("version")}"
-                println("Adding $notation to classpath")
-                dependencyHandler.add(
-                    ScriptHandler.CLASSPATH_CONFIGURATION,
-                    notation)
-            }
+                    settingsDeclarations.getArray("plugins")?.forEachTable { table ->
+                        // TODO : reconcile and use DependencyParser.
+                        if (table.contains("module")) {
+                            val notation = if (table.contains("version")) {
+                                "${table.safeGetString("module")}:${table.safeGetString("version")}"
+                            } else {
+                                "${table.safeGetString("module")}"
+                            }
+                            println("Adding $notation to classpath")
+                            dependencyHandler.add(
+                                ScriptHandler.CLASSPATH_CONFIGURATION,
+                                notation
+                            )
+                        } else {
+                            println("For root, would like to  add ${table.safeGetString("id")}")
+        //                    dependencyHandler.add(
+        //                        ScriptHandler.CLASSPATH_CONFIGURATION,
+        //                        "id: ${table.safeGetString("id")}"
+        //                    )
+                        }
+                    }
         }
     }
 

@@ -53,7 +53,9 @@ class SettingsDeclaredPluginTest {
             minSdk = 21
 
             [dependencies]
-            javalib = { configuration = "implementation", project = ":javaLib" }
+            implementation = [
+                { project = ":javaLib" }
+            ]
         """.trimIndent())
 
         JavaLibraryDeclarativeTest.initJavaLib(project, false)
@@ -84,9 +86,9 @@ plugins {
             [[plugins]]
             id = "com.android.application"
             module = "com.android.tools.build:gradle" 
-            version = "7.4.0"
+            version = "8.3.0-dev"
 
-            [include]
+            [includes]
             app = ":app"
             javaLib = ":javaLib"
 
