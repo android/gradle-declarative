@@ -15,6 +15,7 @@
  */
 package com.android.declarative.internal
 
+import com.android.declarative.internal.configurators.IncludedBuildPluginCache
 import com.android.declarative.internal.configurators.RepositoriesConfigurator
 import com.android.declarative.internal.model.ProjectDependenciesDAG
 import com.android.declarative.internal.parsers.DeclarativeFileParser
@@ -27,6 +28,8 @@ import com.android.declarative.internal.toml.safeGetString
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.Dependency
+import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.initialization.Settings
 import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.internal.time.Time
@@ -81,6 +84,8 @@ class SettingsDeclarativePlugin @Inject constructor(
 
         declareSubProjectsToGradle(settingsDeclarations, settings)
 
+        val pluginManagementIncludedBuild: MutableList<String> = mutableListOf()
+
         settingsDeclarations.getTable("pluginManagement")
             ?.let { pluginManagementDeclarations ->
                 val pluginManagementInfo = PluginManagementParser(logger).parseToml(pluginManagementDeclarations)
@@ -91,7 +96,10 @@ class SettingsDeclarativePlugin @Inject constructor(
                     pluginManagementInfo.repositories,
                 )
 
-                pluginManagementInfo.includedBuilds.forEach(settings.pluginManagement::includeBuild)
+                pluginManagementInfo.includedBuilds.forEach {
+                    settings.pluginManagement.includeBuild(it)
+                    pluginManagementIncludedBuild.add(it)
+                }
             }
 
         settings.pluginManagement { pluginManagement ->
@@ -129,12 +137,25 @@ class SettingsDeclarativePlugin @Inject constructor(
 
         settings.gradle.beforeProject { project ->
 
+            val includedBuildPluginCaches: List<IncludedBuildPluginCache> =
+                pluginManagementIncludedBuild.map {
+                    IncludedBuildPluginCache(
+                        project,
+                        File(settings.rootDir, it)
+                    )
+                }
+
             addRepositoriesToSubProject(settingsDeclarations, settings, project)
 
             if (project.path == ":") {
-                configureRootProject(settingsDeclarations, project)
+                configureRootProject(
+                    settingsDeclarations,
+                    project,
+                    includedBuildPluginCaches)
             } else {
-                configureSubProject(settingsDeclarations, project)
+                configureSubProject(
+                    project
+                )
             }
         }
     }
@@ -189,42 +210,34 @@ class SettingsDeclarativePlugin @Inject constructor(
      *
      * @param project the Gradle's [Project] to configure
      */
-    private fun configureSubProject(settingsDeclarations: TomlParseResult, project: Project) {
+    private fun configureSubProject(
+        project: Project
+    ) {
 
-        val declarativeFile = DeclarativeFileValueSource.enlist(
+        val projectDeclarativeFile = DeclarativeFileValueSource.enlist(
             project.providers,
             project.layout.projectDirectory.file("build.gradle.toml"),
         )
 
         // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
-        if (declarativeFile.isPresent) {
-            settingsDeclarations.getArray("plugins")?.forEachTable { table ->
-                // TODO : reconcile and use DependencyParser.
-                if (table.contains("module")) {
-                    val notation = if (table.contains("version")) {
-                        "${table.safeGetString("module")}:${table.safeGetString("version")}"
-                    } else {
-                        table.safeGetString("module")
-                    }
-                    println("Adding $notation to classpath")
-                    project.buildscript.dependencies.add(
-                        ScriptHandler.CLASSPATH_CONFIGURATION,
-                        notation
-                    )
-                }
-                else if (table.contains("id")) {
-                    println("Adding ${table.safeGetString("id")} to project's classpath")
-                    project.buildscript.dependencies.add(
-                        ScriptHandler.CLASSPATH_CONFIGURATION,
-                        "name: ${table.safeGetString("id")}"
-                    )
-                }
+        if (projectDeclarativeFile.isPresent) {
+
+            // this is a hack until https://github.com/gradle/gradle/issues/22468 is fixed.
+            // we basically steal the versionCatalogs extension from the root project and store them
+            // in the sub project's extensions. In turn the Project's DeclarativePlugin will remove those
+            // so it can be reinserted by Gradle when it is ready to do so.
+            project.rootProject.extensions.findByName("libs")?.let {
+                project.extensions.add("libs", it)
             }
+            project.rootProject.extensions.findByType(VersionCatalogsExtension::class.java)?.let {
+                project.extensions.add("versionCatalogs", it)
+            }
+
             // apply declarative plugin last as it will immediately apply the project's declared plugins which
             // are probably added to the classpath right above.
             project.apply(mapOf("plugin" to "com.android.experiments.declarative"))
         } else {
-            println("${project.path} ignored, build files are present")
+            println("${project.path} ignored, no declarative file present.")
         }
     }
 
@@ -234,41 +247,49 @@ class SettingsDeclarativePlugin @Inject constructor(
      * @param settingsDeclarations Declarative parsed result.
      * @param project Root project's [Project]
      */
-    private fun configureRootProject(settingsDeclarations: TomlParseResult, project: Project) {
-                // add all plugins to the classpath of the root project, so it is available to subprojects.
-                // sadly, so far, I have not found a way to do the equivalent of
-                //    plugins {
-                //        id 'com.android.application' apply false
-                //    }
-                // as the project's PluginManager does not allow me to alter the project's buildscript classpath.
-                // therefore I must force user's to provide the module information and add it to the
-                // classpath configuration.
-                // note : I have tried to use project.pluginManager.apply(...) but it does not add the plugin to the
-                // buildscript classpath, it just applies it (assuming it is already in the classpath).
-                println("Configuring root project")
-                project.buildscript.dependencies.also { dependencyHandler ->
-                    settingsDeclarations.getArray("plugins")?.forEachTable { table ->
-                        // TODO : reconcile and use DependencyParser.
-                        if (table.contains("module")) {
-                            val notation = if (table.contains("version")) {
-                                "${table.safeGetString("module")}:${table.safeGetString("version")}"
-                            } else {
-                                "${table.safeGetString("module")}"
-                            }
-                            println("Adding $notation to classpath")
-                            dependencyHandler.add(
-                                ScriptHandler.CLASSPATH_CONFIGURATION,
-                                notation
-                            )
-                        } else {
-                            println("For root, would like to  add ${table.safeGetString("id")}")
-        //                    dependencyHandler.add(
-        //                        ScriptHandler.CLASSPATH_CONFIGURATION,
-        //                        "id: ${table.safeGetString("id")}"
-        //                    )
-                        }
+    private fun configureRootProject(
+        settingsDeclarations: TomlParseResult,
+        project: Project,
+        includedBuildPluginCaches: List<IncludedBuildPluginCache>
+    ) {
+        // add all plugins to the classpath of the root project, so it is available to subprojects.
+        // sadly, so far, I have not found a way to do the equivalent of
+        //    plugins {
+        //        id 'com.android.application' apply false
+        //    }
+        // as the project's PluginManager does not allow me to alter the project's buildscript classpath.
+        // therefore I must force user's to provide the module information and add it to the
+        // classpath configuration.
+        // note : I have tried to use project.pluginManager.apply(...) but it does not add the plugin to the
+        // buildscript classpath, it just applies it (assuming it is already in the classpath).
+        println("Configuring root project")
+        project.buildscript.dependencies.also { dependencyHandler ->
+            settingsDeclarations.getArray("plugins")?.forEachTable { table ->
+                // TODO : reconcile and use DependencyParser.
+                if (table.contains("module")) {
+                    val notation = if (table.contains("version")) {
+                        "${table.safeGetString("module")}:${table.safeGetString("version")}"
+                    } else {
+                        "${table.safeGetString("module")}"
                     }
+                    println("Adding $notation to classpath")
+                    dependencyHandler.add(
+                        ScriptHandler.CLASSPATH_CONFIGURATION,
+                        notation
+                    )
+                }
+            }
         }
+        // all include builds present in the pluginManagement block are added to the classpath.
+        // this is to work around https://github.com/gradle/gradle/issues/26435
+        val buildLogicDirs = project.files(
+            includedBuildPluginCaches.map(IncludedBuildPluginCache::getPluginClassPath)
+                .flatten()
+        )
+
+        val dependency: Dependency = project.buildscript.dependencies.create(buildLogicDirs)
+        project.buildscript.configurations.getAt(ScriptHandler.CLASSPATH_CONFIGURATION)
+            .dependencies.add(dependency)
     }
 
     /**
