@@ -29,7 +29,6 @@ import kotlinx.coroutines.runBlocking
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Dependency
-import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.initialization.Settings
 import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.internal.time.Time
@@ -222,16 +221,7 @@ class SettingsDeclarativePlugin @Inject constructor(
         // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
         if (projectDeclarativeFile.isPresent) {
 
-            // this is a hack until https://github.com/gradle/gradle/issues/22468 is fixed.
-            // we basically steal the versionCatalogs extension from the root project and store them
-            // in the sub project's extensions. In turn the Project's DeclarativePlugin will remove those
-            // so it can be reinserted by Gradle when it is ready to do so.
-            project.rootProject.extensions.findByName("libs")?.let {
-                project.extensions.add("libs", it)
-            }
-            project.rootProject.extensions.findByType(VersionCatalogsExtension::class.java)?.let {
-                project.extensions.add("versionCatalogs", it)
-            }
+            GradleIssuesWorkarounds.installVersionCatalogSupport(project)
 
             // apply declarative plugin last as it will immediately apply the project's declared plugins which
             // are probably added to the classpath right above.

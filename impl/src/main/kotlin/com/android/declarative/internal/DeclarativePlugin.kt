@@ -41,19 +41,7 @@ class DeclarativePlugin @Inject constructor(
         val cache = DslTypesCache()
         parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
 
-        // this is a hack until https://github.com/gradle/gradle/issues/22468 is fixed.
-        // remove installed extensions
-        val mapOfExtensions = project.extensions.javaClass.getDeclaredField("extensionsStorage").let {
-            it.isAccessible = true
-            it.get(project.extensions)
-        }.let { extensions ->
-            extensions.javaClass.getDeclaredField("extensions").let {
-                it.isAccessible = true
-                it.get(extensions)
-            }
-        } as MutableMap<*, *>
-        mapOfExtensions.remove("libs")
-        mapOfExtensions.remove("versionCatalogs")
+        GradleIssuesWorkarounds.removeVersionCatalogSupport(project)
 
         project.afterEvaluate {
             createTasks(it)
