@@ -137,7 +137,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             )
         }
 
-        var remainingProjectstToInitialize = includedProjectsCount
+        var remainingProjectsToInitialize = includedProjectsCount
         settings.gradle.beforeProject { project ->
 
             val includedBuildPluginCaches: List<IncludedBuildPluginCache> =
@@ -159,8 +159,8 @@ class SettingsDeclarativePlugin @Inject constructor(
                 configureSubProject(
                     project
                 )
-                remainingProjectstToInitialize--
-                if (remainingProjectstToInitialize == 0) {
+                remainingProjectsToInitialize--
+                if (remainingProjectsToInitialize == 0) {
                     println("${nonDeclarativeProjectCounter.get()} sub projects are not using declarative mode.")
                 }
             }
