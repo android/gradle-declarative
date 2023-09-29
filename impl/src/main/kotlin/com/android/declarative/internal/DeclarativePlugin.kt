@@ -39,9 +39,14 @@ class DeclarativePlugin @Inject constructor(
     override fun apply(project: Project) {
         val issueLogger = IssueLogger(lenient = false, logger = LoggerWrapper(project.logger))
         val cache = DslTypesCache()
-        parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
-
-        GradleIssuesWorkarounds.removeVersionCatalogSupport(project)
+        try {
+            parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
+        } catch (e: Exception) {
+            issueLogger.logger.error(e, "Error while parsing the ${project.projectDir}${File.separatorChar}build.gradle.toml")
+            throw e
+        } finally {
+            GradleIssuesWorkarounds.removeVersionCatalogSupport(project)
+        }
 
         project.afterEvaluate {
             createTasks(it)
@@ -126,10 +131,8 @@ class DeclarativePlugin @Inject constructor(
         parsedDecl.getTable("dependencies")?.also {
             @Suppress("UnstableApiUsage")
             DependencyProcessor(
-                { projectPath: String -> project.rootProject.project(projectPath)},
-                project::files,
-                project.dependencyFactory,
-                project.dependencies,
+                { projectPath: String -> project.rootProject.project(projectPath) },
+                project,
                 issueLogger,
             ).process(DependencyParser(issueLogger).parseToml(it))
         }

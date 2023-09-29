@@ -155,8 +155,19 @@ class GenericDeclarativeParser(
                 ?: dslTypeResult.mutableProperties["is${tableKey.capitalized()}"]
             if (mutableProperty != null) {
                 logger.LOG { "F: $tableKey = ${table.get(tableKey)} at $mutableProperty" }
-                val propertyValue: Any = getPropertyValue(table, tableKey, mutableProperty)
-                mutableProperty.set(extension, propertyValue)
+                if (mutableProperty.returnType.jvmErasure.isSubclassOf(MutableCollection::class)) {
+                    when (val value = table.get(tableKey)) {
+                        is TomlArray -> processTomlArray(value, mutableProperty.returnType, mutableProperty.get(extension))
+                        else -> {
+                            logger.LOG { " I don't handle this value $value" }
+                            val propertyValue: Any = getPropertyValue(table, tableKey, mutableProperty)
+                            (mutableProperty.get(extension) as MutableCollection<Any>).add(propertyValue)
+                        }
+                    }
+                } else {
+                    val propertyValue: Any = getPropertyValue(table, tableKey, mutableProperty)
+                    mutableProperty.set(extension, propertyValue)
+                }
             } else {
                 val property = dslTypeResult.properties[tableKey]
                 if (property != null) {
@@ -208,7 +219,12 @@ class GenericDeclarativeParser(
                         when (val value = table.get(tableKey)) {
                             is TomlTable -> processTomlTable(value, property.returnType, subExtensionObject)
                             is TomlArray -> processTomlArray(value, property.returnType, subExtensionObject)
-                            else -> logger.LOG { "I don't handle this value $value" }
+                            else -> {
+                                value?.let {
+                                    logger.LOG { "Adding $value to MutableCollection ${property.name}" }
+                                    (property.get(extension) as MutableCollection<Any>).add(value)
+                                }
+                            }
                         }
                     }
                 } else {

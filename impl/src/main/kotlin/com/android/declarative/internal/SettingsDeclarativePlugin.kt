@@ -15,7 +15,7 @@
  */
 package com.android.declarative.internal
 
-import com.android.declarative.internal.configurators.IncludedBuildPluginCache
+import com.android.declarative.internal.cache.IncludedBuildPluginCache
 import com.android.declarative.internal.configurators.RepositoriesConfigurator
 import com.android.declarative.internal.model.ProjectDependenciesDAG
 import com.android.declarative.internal.parsers.DeclarativeFileParser
@@ -37,6 +37,7 @@ import java.io.File
 import java.util.logging.Logger
 import javax.inject.Inject
 import org.gradle.api.model.ObjectFactory
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Plugin implementation that handles [Settings] population from a settings.gradle.toml file
@@ -49,6 +50,8 @@ class SettingsDeclarativePlugin @Inject constructor(
 ): AbstractDeclarativePlugin(), Plugin<Settings> {
     override val buildFileName: String
         get() = "settings.gradle.toml"
+
+    private val nonDeclarativeProjectCounter = AtomicInteger(0)
 
     private val logger =
         IssueLogger(lenient = false, JdkLoggerWrapper(
@@ -81,7 +84,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             parseResult
         }
 
-        declareSubProjectsToGradle(settingsDeclarations, settings)
+        val includedProjectsCount = declareSubProjectsToGradle(settingsDeclarations, settings)
 
         val pluginManagementIncludedBuild: MutableList<String> = mutableListOf()
 
@@ -134,6 +137,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             )
         }
 
+        var remainingProjectsToInitialize = includedProjectsCount
         settings.gradle.beforeProject { project ->
 
             val includedBuildPluginCaches: List<IncludedBuildPluginCache> =
@@ -155,8 +159,13 @@ class SettingsDeclarativePlugin @Inject constructor(
                 configureSubProject(
                     project
                 )
+                remainingProjectsToInitialize--
+                if (remainingProjectsToInitialize == 0) {
+                    println("${nonDeclarativeProjectCounter.get()} sub projects are not using declarative mode.")
+                }
             }
         }
+
     }
 
     private fun getListOfFocusedProjects(
@@ -199,8 +208,13 @@ class SettingsDeclarativePlugin @Inject constructor(
      */
     private fun addRepositoriesToSubProject(settingsDeclarations: TomlParseResult, settings: Settings, project: Project) {
         settings.pluginManagement.repositories.forEach {
-            println("Adding ${it.name} to project's buildscript")
+            logger.logger.verbose("Adding ${it.name} to project's buildscript")
             project.buildscript.repositories.add(it)
+        }
+
+        settings.dependencyResolutionManagement.repositories.forEach { repository ->
+            logger.logger.verbose("Adding ${repository.name} to project's repositories")
+            project.repositories.add(repository)
         }
     }
 
@@ -221,12 +235,14 @@ class SettingsDeclarativePlugin @Inject constructor(
         // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
         if (projectDeclarativeFile.isPresent) {
 
+
             GradleIssuesWorkarounds.installVersionCatalogSupport(project)
 
             // apply declarative plugin last as it will immediately apply the project's declared plugins which
             // are probably added to the classpath right above.
             project.apply(mapOf("plugin" to "com.android.experiments.declarative"))
         } else {
+            nonDeclarativeProjectCounter.incrementAndGet()
             println("${project.path} ignored, no declarative file present.")
         }
     }
@@ -260,7 +276,7 @@ class SettingsDeclarativePlugin @Inject constructor(
                     val notation = if (table.contains("version")) {
                         "${table.safeGetString("module")}:${table.safeGetString("version")}"
                     } else {
-                        "${table.safeGetString("module")}"
+                        table.safeGetString("module")
                     }
                     println("Adding $notation to classpath")
                     dependencyHandler.add(
@@ -290,8 +306,9 @@ class SettingsDeclarativePlugin @Inject constructor(
      *
      * @param settingsDeclarations root project settings.gradle.toml file parsed content.
      * @param settings [Settings] use to include sub project.
+     * @return the number of sub projects included
      */
-    private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings) {
+    private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings): Int {
         val dependenciesResolver = DependenciesResolver(logger)
 
         var includedProjectsNumber = 0
@@ -354,5 +371,6 @@ class SettingsDeclarativePlugin @Inject constructor(
             totalProjectsNumber++
         }
         println("Included $includedProjectsNumber projects, discarded ${totalProjectsNumber - includedProjectsNumber}")
+        return includedProjectsNumber
     }
 }
