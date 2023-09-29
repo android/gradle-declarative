@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.declarative.internal.configurators
+package com.android.declarative.internal.cache
 
 import org.gradle.api.Project
 import java.io.File

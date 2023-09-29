@@ -16,18 +16,22 @@
 
 package com.android.declarative.internal
 
-import com.android.declarative.internal.model.DependencyInfo.Files
-import com.android.declarative.internal.model.DependencyInfo.Maven
-import com.android.declarative.internal.model.DependencyInfo.Notation
+import com.android.declarative.internal.model.DependencyInfo
+import com.android.declarative.internal.model.DependencyInfo.*
 import com.android.declarative.internal.model.DependencyType
 import com.android.utils.ILogger
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.FileCollectionDependency
+import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.api.artifacts.VersionCatalog
+import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.artifacts.dsl.DependencyFactory
 import org.gradle.api.artifacts.dsl.DependencyHandler
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.plugins.ExtensionContainer
+import org.gradle.api.provider.Provider
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -37,6 +41,7 @@ import org.mockito.Mockito.times
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
 import org.mockito.quality.Strictness
+import java.util.*
 
 @Suppress("UnstableApiUsage")
 class DependencyProcessorTest {
@@ -51,12 +56,17 @@ class DependencyProcessorTest {
     lateinit var dependencyFactory: DependencyFactory
 
     @Mock
+    lateinit var fileCollection: ConfigurableFileCollection
+
+    @Mock
     lateinit var project: Project
 
     @Before
     fun setup() {
         Mockito.`when`(project.rootProject).thenReturn(project)
-        Mockito.`when`(project.files()).thenReturn(Mockito.mock(ConfigurableFileCollection::class.java))
+        Mockito.`when`(project.files()).thenReturn(fileCollection)
+        Mockito.`when`(project.dependencies).thenReturn(dependencyHandler)
+        Mockito.`when`(project.dependencyFactory).thenReturn(dependencyFactory)
     }
 
     @Test
@@ -160,34 +170,37 @@ class DependencyProcessorTest {
     @Test
     fun testVersionCatalogDependency() {
         val parser = createDependenciesParser()
-        val dependency = createExternalDependency("libs.junit")
+        val extensions = Mockito.mock(ExtensionContainer::class.java)
+        Mockito.`when`(project.extensions).thenReturn(extensions)
+        val versionCatalogs = Mockito.mock(VersionCatalogsExtension::class.java)
+        Mockito.`when`(extensions.findByType(VersionCatalogsExtension::class.java)).thenReturn(versionCatalogs)
+        val libs = Mockito.mock(VersionCatalog::class.java)
+        Mockito.`when`(versionCatalogs.find("libs")).thenReturn(Optional.of(libs))
+        val provider = Mockito.mock(Provider::class.java) as Provider<MinimalExternalModuleDependency>
+        val providerOptional = Optional.of(provider)
+        Mockito.`when`(libs.findLibrary("junit")).thenReturn(providerOptional)
+
         val dependencies = listOf(
-            Notation(
-                DependencyType.NOTATION,
+            Alias(
                 "implementation",
                 "libs.junit"
             )
         )
         parser.process(dependencies)
-        Mockito.verify(dependencyHandler).add("implementation", dependency)
+        Mockito.verify(dependencyHandler).add("implementation", providerOptional)
         Mockito.verifyNoMoreInteractions(dependencyHandler)
     }
 
     @Test
     fun testFilesNotationDependency() {
-        val fileCollection = Mockito.mock(ConfigurableFileCollection::class.java)
         val parser = DependencyProcessor(
             { id -> project.rootProject.project(id)},
-            { fileCollection },
-            dependencyFactory,
-            dependencyHandler,
+            project,
             IssueLogger(lenient = true, logger = Mockito.mock(ILogger::class.java))
         )
-        val dependency = Mockito.mock(FileCollectionDependency::class.java).also {
-            Mockito.`when`(dependencyFactory.create(fileCollection)).thenReturn(
-                it
-            )
-        }
+        val dependency = Mockito.mock(FileCollectionDependency::class.java)
+        Mockito.doReturn(dependency).`when`(dependencyFactory).create(fileCollection)
+
         val dependencies = listOf(
             Files(
                 "implementation",
@@ -238,9 +251,7 @@ class DependencyProcessorTest {
     private fun createDependenciesParser() =
         DependencyProcessor(
             { id -> project.rootProject.project(id)},
-            { project.files() },
-            dependencyFactory,
-            dependencyHandler,
+            project,
             IssueLogger(lenient = true, logger = Mockito.mock(ILogger::class.java))
     )
     private fun createSubProject(projectPath: String): Project =

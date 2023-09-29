@@ -17,17 +17,17 @@
 
 package com.android.declarative.internal
 
+import com.android.declarative.internal.cache.VersionCatalogs
 import com.android.declarative.internal.model.DependencyInfo
 import com.android.declarative.internal.model.DependencyInfo.Alias
 import com.android.declarative.internal.model.DependencyInfo.ExtensionFunction
 import com.android.declarative.internal.model.DependencyInfo.Files
 import com.android.declarative.internal.model.DependencyInfo.Maven
 import com.android.declarative.internal.model.DependencyInfo.Notation
+import com.android.declarative.internal.model.DependencyInfo.Platform
 import com.android.declarative.internal.model.DependencyType
 import org.gradle.api.Project
-import org.gradle.api.artifacts.dsl.DependencyFactory
 import org.gradle.api.artifacts.dsl.DependencyHandler
-import org.gradle.api.file.ConfigurableFileCollection
 
 /**
  * A processor class that process [List] of [DependencyInfo] for a module and adds such
@@ -36,11 +36,14 @@ import org.gradle.api.file.ConfigurableFileCollection
 @Suppress("UnstableApiUsage")
 class DependencyProcessor(
     private val projectResolver: (id: String) -> Project,
-    private val fileCollectionFactory: () -> ConfigurableFileCollection,
-    private val dependencyFactory: DependencyFactory,
-    private val dependencyHandler: DependencyHandler,
+    private val project: Project,
     private val issueLogger: IssueLogger,
 ) {
+
+    private val dependencyHandler = project.dependencies
+    private val dependencyFactory = project.dependencyFactory
+    private val versionCatalogs = VersionCatalogs(issueLogger)
+
     fun process(dependencies: List<DependencyInfo>) {
         dependencies.forEach { dependency ->
             when(dependency) {
@@ -63,17 +66,62 @@ class DependencyProcessor(
                     addLibraryDependency(dependency)
                 }
                 is ExtensionFunction -> {
-                    throw RuntimeException("Not Supported yet !")
+                    addExtensionDependency(dependency)
                 }
                 is Alias -> {
-                    throw RuntimeException("Version catalogs not supported yet.")
+                    addVersionCatalogDependency(dependency)
+                }
+                is Platform -> {
+                    addPlatformDependency(dependency)
                 }
             }
         }
     }
 
+    private fun addVersionCatalogDependency(dependency: Alias) {
+
+        val versionCatalogIdentifier = dependency.alias.substringBefore('.')
+        val libraryName = dependency.alias.substringAfter('.')
+        val versionCatalog = versionCatalogs.getVersionCatalog(project, versionCatalogIdentifier)
+        val lib = versionCatalog.findLibrary(libraryName)
+        lib.ifPresentOrElse({
+            println("Adding Version catalog ${dependency.alias} to ${dependency.configuration}")
+            dependencyHandler.add(
+                dependency.configuration,
+                it
+            )
+        }) {
+            issueLogger.logger.warning(
+                "$libraryName library not found in version catalog $versionCatalogIdentifier"
+            )
+        }
+    }
+
+    private fun addPlatformDependency(dependency: Platform) {
+        println("Adding platform ${dependency.name} to ${dependency.configuration}")
+        if (dependency.name.contains(".")) {
+            // TODO: Check that the assumption of a notation with . is a version catalog alias.
+            val versionCatalogIdentifier = dependency.name.substringBefore('.')
+            val platformName = dependency.name.substringAfter('.')
+            val versionCatalog = versionCatalogs.getVersionCatalog(project, versionCatalogIdentifier)
+            val lib = versionCatalog.findLibrary(platformName)
+            if (lib.isPresent) {
+                println("Adding platform ${lib.get().get()} to ${dependency.configuration}")
+
+                dependencyHandler.platform(lib.get().get().toString())
+            }
+//            lib.ifPresentOrElse(dependencyHandler::platform) {
+//                issueLogger.raiseError("Cannot find ${dependency.name} in version catalog")
+//            }
+        } else {
+            dependencyHandler.platform(
+                dependency.name
+            )
+        }
+    }
+
     private fun addFilesDependency(dependency: Files) {
-        val fileCollection = fileCollectionFactory()
+        val fileCollection = project.files()
         dependency.files.forEach(fileCollection::from)
         println("adding files dependency ${dependency.files} to ${dependency.configuration}")
         dependencyHandler.add(
@@ -111,5 +159,30 @@ class DependencyProcessor(
         }
         println("Adding $dependency to ${dependencyInfo.configuration}")
         dependencyHandler.add(dependencyInfo.configuration, dependency)
+    }
+
+
+    private fun addExtensionDependency(dependency: DependencyInfo.ExtensionFunction) {
+        if (dependency.extension == "kotlin") {
+            if (dependency.parameters.size == 0 || dependency.parameters.size > 2) {
+                issueLogger.raiseError("Unsupported number of parameters for kotlin() extension, needed one" +
+                        " or two parameters but got ${dependency.parameters.size}")
+            }
+            val kotlinDependencyExtensions = DeclarativePlugin::class.java.classLoader.loadClass(
+                "org.gradle.kotlin.dsl.KotlinDependencyExtensionsKt"
+            )
+
+            val method = kotlinDependencyExtensions.getMethod("kotlin", DependencyHandler::class.java, String::class.java, String::class.java)
+            val gradleDependency = dependencyFactory.create(
+                method.invoke(
+                    null, // extension function in kotlin are static methods in Java.
+                    dependencyHandler,
+                    dependency.parameters["module"],
+                    dependency.parameters["version"],
+                ) as String
+            )
+            println("Adding ${gradleDependency.name} to ${dependency.configuration}")
+            dependencyHandler.add(dependency.configuration, gradleDependency)
+        }
     }
 }
