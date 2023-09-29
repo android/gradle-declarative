@@ -41,6 +41,7 @@ class DeclarativePlugin @Inject constructor(
         val cache = DslTypesCache()
         parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
 
+        GradleIssuesWorkarounds.removeVersionCatalogSupport(project)
 
         project.afterEvaluate {
             createTasks(it)
@@ -70,8 +71,8 @@ class DeclarativePlugin @Inject constructor(
         // plugins must be applied first so extensions are correctly registered.
         parsedDecl.getArray("plugins")?.also { plugins ->
             PluginParser().parse(plugins).forEach { pluginInfo ->
-                println("In project, applying ${pluginInfo.id}")
-                project.pluginManager.apply(pluginInfo.id)
+                issueLogger.logger.quiet("In ${project.path} , applying ${pluginInfo.id}")
+                project.plugins.apply(pluginInfo.id)
             }
         }
 
@@ -79,21 +80,24 @@ class DeclarativePlugin @Inject constructor(
             val buildFileCount = it.size()
             for (index in 0 until buildFileCount) {
                 val includedBuildFile = project.layout.projectDirectory.file(it.getString(index))
-                parseDeclarativeBuildFile(project, issueLogger,  includedBuildFile, cache)
+                parseDeclarativeBuildFile(project, issueLogger, includedBuildFile, cache)
             }
         }
 
         parsedDecl.keySet().forEach { topLevelDeclaration ->
-            when(topLevelDeclaration) {
+            when (topLevelDeclaration) {
                 "includeBuildFiles" -> {
                     // skip includes processing again.
                 }
+
                 "plugins" -> {
                     // already applied above.
                 }
+
                 "dependencies" -> {
                     // handled below, so all DSL driven configurations are created before dependencies are added.
                 }
+
                 "androidComponents" -> {
                     // androidComponents is handled separately with a dedicated parser since it is very
                     // heavy on callbacks which cannot be generically parsed.
@@ -106,6 +110,7 @@ class DeclarativePlugin @Inject constructor(
                         issueLogger
                     )
                 }
+
                 else -> {
                     parseTomlTable(
                         GenericDeclarativeParser(project, cache, issueLogger),

@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2023 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.android.declarative.internal.variantApi
 
 import com.android.build.api.variant.AndroidComponentsExtension
@@ -25,7 +40,7 @@ class AndroidComponentsParser(
     private val issueLogger: IssueLogger = IssueLogger(false, LoggerWrapper(project.logger)),
 ): DeclarativeFileParser {
 
-    override fun <T: Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
+    override fun <T : Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
         // the extension is a subclass of AndroidComponentsExtension, its type parameters will tell me
         // type types of the VariantBuilder and Variant object I am dealing with.
         val superType = type.supertypes.first { superType ->
