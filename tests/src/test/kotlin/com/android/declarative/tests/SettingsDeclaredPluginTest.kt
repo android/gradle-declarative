@@ -28,7 +28,7 @@ class SettingsDeclaredPluginTest {
     @Rule
     @JvmField
     val project: GradleTestProject = GradleTestProject.builder()
-        .withExtraPluginClasspath("com.android.experiments.declarative:api:${System.getenv("PLUGIN_VERSION")}")
+        .withExtraPluginClasspath("com.android.experiments.declarative:settings-api:${System.getenv("PLUGIN_VERSION")}")
         .fromTestApp(
             MultiModuleTestProject(
                 mapOf<String, GradleProject>(

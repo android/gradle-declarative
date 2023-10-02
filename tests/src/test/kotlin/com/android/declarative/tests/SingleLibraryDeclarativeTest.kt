@@ -26,7 +26,7 @@ class SingleLibraryDeclarativeTest {
 
     @get:Rule
     val project: GradleTestProject = GradleTestProject.builder()
-        .withExtraPluginClasspath("com.android.experiments.declarative:api:${System.getenv("PLUGIN_VERSION")}")
+        .withExtraPluginClasspath("com.android.experiments.declarative:project-api:${System.getenv("PLUGIN_VERSION")}")
         .fromTestApp(HelloWorldLibraryApp.create()).create()
 
     @Test
@@ -50,7 +50,7 @@ class SingleLibraryDeclarativeTest {
         """.trimIndent())
         app.buildFile.writeText(
             """
-                apply plugin: 'com.android.experiments.declarative'
+                apply plugin: 'com.android.experiments.declarative.project'
             """.trimIndent()
         )
 

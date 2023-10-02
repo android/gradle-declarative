@@ -41,7 +41,7 @@ class LargeDeclarativeTest {
     @JvmField
     val project: GradleTestProject = GradleTestProject.builder()
         .withHeap("4G")
-        .withExtraPluginClasspath("com.android.experiments.declarative:api:${System.getenv("PLUGIN_VERSION")}")
+        .withExtraPluginClasspath("com.android.experiments.declarative:settings-api:${System.getenv("PLUGIN_VERSION")}")
         .fromTestApp(
             MultiModuleTestProject(
                 mutableMapOf<String, GradleProject>().also { projects ->

@@ -4,8 +4,11 @@ dependencyResolutionManagement {
 
 rootProject.name = "com.android.experiments.declarative"
 
-include("api")
-include("impl")
+include("settings-api")
+include("project-api")
+include("common")
+include("project-plugin")
+include("settings-plugin")
 include("tests")
 
 // The remaining part of this script is to deal with importing dependencies from studio-main workspace.
@@ -49,7 +52,7 @@ settings.gradle.beforeProject {
     if (path.contains("tests")) {
         this.afterEvaluate {
             this.getTasksByName("test", false).forEach {
-                it.dependsOn(":api:publish", ":impl:publish")
+                it.dependsOn(":settings-api:publish", ":settings-plugin:publish", ":project-api:publish", ":project-plugin:publish")
             }
         }
     }

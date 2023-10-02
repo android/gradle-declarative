@@ -45,6 +45,7 @@ pluginManagement {
 
 plugins {
     id 'com.android.experiments.declarative.settings' version '0.0.1'
+    id 'com.android.experiments.declarative.project' version '0.0.1' apply false
 }
 
 dependencyResolutionManagement {
