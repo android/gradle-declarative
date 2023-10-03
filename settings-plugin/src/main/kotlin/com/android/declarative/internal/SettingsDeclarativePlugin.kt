@@ -112,8 +112,6 @@ class SettingsDeclarativePlugin @Inject constructor(
             }
 
         settings.pluginManagement { pluginManagement ->
-            // declare our plugin version to the plugins management
-//            pluginManagement.plugins.id("com.android.experiments.declarative.project").version(Constants.PLUGIN_VERSION)
 
             // declare all declared plugin version to the plugins management.
             settingsDeclarations.getArray("plugins")?.also {
