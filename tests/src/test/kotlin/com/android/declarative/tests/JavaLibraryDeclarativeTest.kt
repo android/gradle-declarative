@@ -29,7 +29,7 @@ class JavaLibraryDeclarativeTest {
     @Rule
     @JvmField
     val project: GradleTestProject = GradleTestProject.builder()
-        .withExtraPluginClasspath("com.android.experiments.declarative:api:${System.getenv("PLUGIN_VERSION")}")
+        .withExtraPluginClasspath("com.android.experiments.declarative:project-api:${System.getenv("PLUGIN_VERSION")}")
         .fromTestApp(
             MultiModuleTestProject(
                 mapOf<String, GradleProject>(
@@ -62,7 +62,7 @@ class JavaLibraryDeclarativeTest {
             if (includeDeclarativePlugin) {
                 lib.buildFile.writeText(
                     """
-                    apply plugin: 'com.android.experiments.declarative'
+                    apply plugin: 'com.android.experiments.declarative.project'
                     """.trimIndent()
                 )
             }
@@ -90,7 +90,7 @@ class JavaLibraryDeclarativeTest {
         """.trimIndent())
         app.buildFile.writeText(
             """
-                apply plugin: 'com.android.experiments.declarative'
+                apply plugin: 'com.android.experiments.declarative.project'
             """.trimIndent()
         )
 
