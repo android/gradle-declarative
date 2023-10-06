@@ -243,9 +243,18 @@ class GenericDeclarativeParser(
                     if (propertyValue != null) {
                         // If property value is simple type, just set the value on the extension object.
                         try {
+                            // If the property has backing field, we can use property setter
                             mutableProperty.set(extension, propertyValue)
                         } catch (e: Error) {
-                            issueLogger.logger.warning("Could not process property $mutableProperty due to reflection error $e")
+                            // If kotlin reflect could not find an accessor for this property and if there is no backing javaField, we receive
+                            // a KotlinReflectionError when trying to set the property.
+                            // In such cases, we can bypass the kotlin reflect and set the value by directly invoking java method if it is available.
+                            val callable = type.java.methods.find { it.name == "set${tableKey.capitalized()}" }
+                            if (callable != null) {
+                                callable.invoke(extension, propertyValue)
+                            } else {
+                                issueLogger.raiseError("Could not set mutable property $mutableProperty on $extension object with error $e")
+                            }
                         }
                     } else {
                         // We reach here in two cases:
@@ -266,32 +275,41 @@ class GenericDeclarativeParser(
                     processProperty(property, table, tableKey, extension)
                 } else {
                     // last ditch, look for member.
-                    if (mapTypes.any { it.isAssignableFrom(type.javaObjectType) }) {
-                        // TODO: figure out a better way to handle map types
-                        val callables = dslTypeResult.members["put"]
-                        if (callables != null) {
-                            invokePutMethod(callables, extension, table, tableKey)
-                        }else {
-                            issueLogger.raiseError(
-                                "Cannot find method put in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
-                            )
-                        }
-                    } else {
-                        val callables = dslTypeResult.members[tableKey]
-                            ?: dslTypeResult.members["set${tableKey.capitalized()}"]
-                        if (callables != null ) {
-                            logger.LOG { "Found ${callables.size} potential candidates for $tableKey" }
-                            invokeMethod(callables, extension, table, tableKey)
-                        } else {
-                            issueLogger.raiseError(
-                                "Cannot find $tableKey in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
-                            )
-                        }
-                    }
+                    setValueThroughExtensionMemberLookup(dslTypeResult, type, extension, table, tableKey)
                 }
             }
         }
         contexts.removeLast()
+    }
+
+    private fun <T : Any> setValueThroughExtensionMemberLookup(
+        dslTypeResult: DslTypeResult<Any>,
+        type: KClass<out T>,
+        extension: T,
+        table: TomlTable,
+        tableKey: String) {
+        if (mapTypes.any { it.isAssignableFrom(type.javaObjectType) }) {
+            // TODO: figure out a better way to handle map types
+            val callables = dslTypeResult.members["put"]
+            if (callables != null) {
+                invokePutMethod(callables, extension, table, tableKey)
+            }else {
+                issueLogger.raiseError(
+                    "Cannot find method put in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
+                )
+            }
+        } else {
+            val callables = dslTypeResult.members[tableKey]
+                ?: dslTypeResult.members["set${tableKey.capitalized()}"]
+            if (callables != null ) {
+                logger.LOG { "Found ${callables.size} potential candidates for $tableKey" }
+                invokeMethod(callables, extension, table, tableKey)
+            } else {
+                issueLogger.raiseError(
+                    "Cannot find $tableKey in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
+                )
+            }
+        }
     }
 
     // HANDLE REFERENCES TO OTHER NAMED OBJECTS
@@ -472,7 +490,7 @@ class GenericDeclarativeParser(
         }
         for (callable in callables) {
             if (callable.valueParameters.size != 1) {
-                logger.LOG { "$callable has been eliminated because it has ${callable.parameters.size} parameter(s)"}
+                logger.LOG { "$callable has been eliminated because it has ${callable.valueParameters.size} parameter(s)"}
                 continue
             }
             val parameterType = callable.parameters[1].type.withNullability(false)

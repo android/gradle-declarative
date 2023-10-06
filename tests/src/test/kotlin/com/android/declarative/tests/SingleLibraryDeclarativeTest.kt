@@ -43,6 +43,40 @@ class SingleLibraryDeclarativeTest {
             [android.defaultConfig]
             minSdk = 21
 
+            [android.defaultConfig.ndk]
+            ldLibs = ["315"]
+
+            # nullable property
+            [android.defaultConfig.signingConfig]
+            storePassword = "333"
+            storeType = "334"
+
+            [android.buildTypes.debug]
+            proguardFiles = ["/Users/amishar/git/gradle-declarative/tests/258/259/260"]
+
+            [android.buildTypes.debug.shaders]
+            glslcArgs = ["261"]
+
+            # map type field
+            [android.buildTypes.debug.shaders.scopedGlslcArgs]
+            "262" = "263"
+
+            # property with no backing field and accessor
+            [android.dataBinding]
+            addDefaultAdapters = true
+
+            [android.buildTypes.debug.signingConfig]
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = false
+            enableV4Signing = true
+
+            [android.buildTypes.debug.externalNativeBuild.ndkBuild]
+            abiFilters = ["240"]
+
+            [android.buildTypes.debug.externalNativeBuild.experimentalProperties]
+            "238" = "239"
+
             [dependencies]
             implementation = [
                 { project = ":lib" } 
