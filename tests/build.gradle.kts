@@ -26,7 +26,7 @@ tasks.test {
 	this.environment("CUSTOM_REPO", System.getenv("CUSTOM_REPO") + File.pathSeparatorChar + "${project.rootDir}/out/repo")
 	this.environment("TEST_TMPDIR", project.buildDir)
 	this.environment("TEST_ROOTDIR", project.rootProject.projectDir)
-	this.environment("AGP_WORKSPACE_LOCATION", agpWorkspace)
+	this.environment("AGP_WORKSPACE_LOCATION", agpWorkspace!!)
 	this.environment("PLUGIN_VERSION", Constants.PLUGIN_VERSION)
 }
 
@@ -38,4 +38,5 @@ dependencies {
 	testImplementation(libs.testutils)
 	testImplementation(libs.testFramework)
 	testImplementation(libs.toolsCommon)
+	testImplementation(libs.agpApi)
 }

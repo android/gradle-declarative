@@ -21,8 +21,11 @@ import com.android.declarative.common.DslTypesCache
 import com.android.declarative.common.LoggerWrapper
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.LOG
+import com.google.common.collect.ListMultimap
+import org.gradle.api.JavaVersion
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.configurationcache.extensions.capitalized
 import org.tomlj.TomlArray
@@ -33,12 +36,14 @@ import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KMutableProperty1
+import kotlin.reflect.KProperty1
 import kotlin.reflect.KType
 import kotlin.reflect.KTypeProjection
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
+import kotlin.reflect.jvm.javaField
 import kotlin.reflect.jvm.jvmErasure
 
 /**
@@ -59,7 +64,8 @@ class GenericDeclarativeParser(
             String::class.createType(listOf(), false) to { table, key -> table.getString(key) },
             Boolean::class.createType(listOf(), false) to { table, key -> table.getBoolean(key) },
             Double::class.createType(listOf(), false) to { table, key -> table.getDouble(key) },
-            File::class.createType(listOf(), false) to { table, key -> File(table.getString(key))},
+            File::class.createType(listOf(), false) to { table, key -> File(table.getString(key)!!)},
+            JavaVersion::class.createType(listOf(), false) to { table, key -> JavaVersion.valueOf(table.getString(key)!!)},
             Any::class.createType(listOf(), false) to { table, key -> table.get(key) }
         )
     }
@@ -136,12 +142,74 @@ class GenericDeclarativeParser(
 
     private val contexts = ArrayDeque<Context>()
 
+    private fun <T : Any> processProperty(
+        property: KProperty1<in T, Any>,
+        table: TomlTable,
+        tableKey: String,
+        extension: T) {
+        val subExtensionObject = property.get(extension)
+        if (subExtensionObject is NamedDomainObjectContainer<*>) {
+            val valueFromToml = table.getTable(tableKey)
+            logger.LOG {
+                "O: $tableKey = $valueFromToml at $property, instance = $subExtensionObject"
+            }
+            logger.LOG { "Got ${property.name} value $subExtensionObject with type ${subExtensionObject.javaClass}" }
+            val domainObjectType = property.returnType.arguments[0].type
+                ?: throw RuntimeException("${property.name}  with type ${subExtensionObject.javaClass} does not have a parameter type to the NamedDomainObjectContainer")
+            valueFromToml?.let { namesForDomainObjects ->
+                logger.LOG { "maybeCreating ${namesForDomainObjects.keySet().size} instances in $tableKey" }
+                namesForDomainObjects.keySet().forEach { nameForDomainObject ->
+                    logger.LOG { "maybeCreating $nameForDomainObject of type $domainObjectType" }
+                    val containedExtension = subExtensionObject.maybeCreate(nameForDomainObject)
+                    contexts.addLast(
+                        NamedDomainObjectContainerContext(
+                            subExtensionObject,
+                            domainObjectType
+                        )
+                    )
+                    parse(
+                        namesForDomainObjects.getTable(nameForDomainObject)!!,
+                        property.returnType.arguments[0].type!!,
+                        containedExtension
+                    )
+                    contexts.removeLast()
+                }
+            }
+        } else  if (subExtensionObject is Property<*>) {
+            // Gradle properties only have one parameter type. We can retrieve it from the property
+            // declaration on the extension type we are parsing for.
+            if (property.returnType.arguments.size != 1) {
+                throw RuntimeException("org.gradle.api.provider.Property " +
+                        "are supposed to have only one parameter type.")
+            }
+            val propertyType = property.returnType.arguments[0]
+            tableExtractors.get(propertyType.type)?.invoke(table, tableKey)?.let { valueFromToml ->
+                logger.LOG {
+                    "O: $tableKey = $valueFromToml for Property $property, instance = $subExtensionObject"
+                }
+                (subExtensionObject as Property<Any>).set(valueFromToml)
+            }
+
+        } else {
+            logger.LOG { "Parsing for ${property.returnType.jvmErasure}" }
+            when (val value = table.get(tableKey)) {
+                is TomlTable -> processTomlTable(value, property.returnType, subExtensionObject)
+                is TomlArray -> processTomlArray(value, property.returnType, subExtensionObject)
+                else -> {
+                    value?.let {
+                        logger.LOG { "Adding $value to MutableCollection ${property.name}" }
+                        (property.get(extension) as MutableCollection<Any>).add(value)
+                    }
+                }
+            }
+        }
+    }
+
     override fun <T : Any> parse(table: TomlTable, type: KClass<out T>, extension: T) {
 
         val dslTypeResult: DslTypeResult<Any> = cache.getCache(type)
 
         contexts.addLast(ExtensionContext(extension, dslTypeResult))
-
         table.keySet().forEach { tableKey ->
             if (tableKey == "_dispatch_") {
                 issueLogger.expect(
@@ -159,6 +227,8 @@ class GenericDeclarativeParser(
                 ?: dslTypeResult.mutableProperties["is${tableKey.capitalized()}"]
             if (mutableProperty != null) {
                 logger.LOG { "F: $tableKey = ${table.get(tableKey)} at $mutableProperty" }
+                // Try setting the property as accessible. "ldlibs" is inaccessible maybe because it is nullable and not initialized?
+                mutableProperty.javaField?.trySetAccessible()
                 if (mutableProperty.returnType.jvmErasure.isSubclassOf(MutableCollection::class)) {
                     when (val value = table.get(tableKey)) {
                         is TomlArray -> processTomlArray(value, mutableProperty.returnType, mutableProperty.get(extension))
@@ -169,81 +239,55 @@ class GenericDeclarativeParser(
                         }
                     }
                 } else {
-                    val propertyValue: Any = getPropertyValue(table, tableKey, mutableProperty)
-                    mutableProperty.set(extension, propertyValue)
+                    val propertyValue: Any? = getPropertyValueOrNull(table, tableKey, mutableProperty)
+                    if (propertyValue != null) {
+                        // If property value is simple type, just set the value on the extension object.
+                        try {
+                            mutableProperty.set(extension, propertyValue)
+                        } catch (e: Error) {
+                            issueLogger.logger.warning("Could not process property $mutableProperty due to reflection error $e")
+                        }
+                    } else {
+                        // We reach here in two cases:
+                        // 1. When the mutableProperty.returnType.withNullability(false) is generic type(V)
+                        // 2. when the mutableProperty is nullable like ApkSigningConfig? property of DefaultConfig.
+                        // In first case, we can treat the mutable property as property but in second case, the property.get(instance)
+                        // returns null. We would need to create the appropriate object before we can continue processing.
+                        // TODO: Handle nullable properties that are initialized as null on extension an object. Also figure
+                        // out why this happens on some extension objects.
+                        if (mutableProperty.get(extension) != null) {
+                            processProperty(mutableProperty, table, tableKey, extension)
+                        }
+                    }
                 }
             } else {
                 val property = dslTypeResult.properties[tableKey]
                 if (property != null) {
-                    val subExtensionObject = property.get(extension)
-                    if (subExtensionObject is NamedDomainObjectContainer<*>) {
-                        val valueFromToml = table.getTable(tableKey)
-                        logger.LOG {
-                            "O: $tableKey = $valueFromToml at $property, instance = $subExtensionObject"
-                        }
-                        logger.LOG { "Got ${property.name} value $subExtensionObject with type ${subExtensionObject.javaClass}" }
-                        val domainObjectType = property.returnType.arguments[0].type
-                            ?: throw RuntimeException("${property.name}  with type ${subExtensionObject.javaClass} does not have a parameter type to the NamedDomainObjectContainer")
-                        valueFromToml?.let { namesForDomainObjects ->
-                            logger.LOG { "maybeCreating ${namesForDomainObjects.keySet().size} instances in $tableKey" }
-                            namesForDomainObjects.keySet().forEach { nameForDomainObject ->
-                                logger.LOG { "maybeCreating $nameForDomainObject of type $domainObjectType" }
-                                val containedExtension = subExtensionObject.maybeCreate(nameForDomainObject)
-                                contexts.addLast(
-                                    NamedDomainObjectContainerContext(
-                                        subExtensionObject,
-                                        domainObjectType
-                                    )
-                                )
-                                parse(
-                                    namesForDomainObjects.getTable(nameForDomainObject)!!,
-                                    property.returnType.arguments[0].type!!,
-                                    containedExtension
-                                )
-                                contexts.removeLast()
-                            }
-                        }
-                    } else  if (subExtensionObject is Property<*>) {
-                        // Gradle properties only have one parameter type. We can retrieve it from the property
-                        // declaration on the extension type we are parsing for.
-                        if (property.returnType.arguments.size != 1) {
-                            throw RuntimeException("org.gradle.api.provider.Property " +
-                                    "are supposed to have only one parameter type.")
-                        }
-                        val propertyType = property.returnType.arguments[0]
-                        tableExtractors.get(propertyType.type)?.invoke(table, tableKey)?.let { valueFromToml ->
-                            logger.LOG {
-                                "O: $tableKey = $valueFromToml for Property $property, instance = $subExtensionObject"
-                            }
-                            (subExtensionObject as Property<Any>).set(valueFromToml)
-                        }
-
-                    } else {
-                        logger.LOG { "Parsing for ${property.returnType.jvmErasure}" }
-                        when (val value = table.get(tableKey)) {
-                            is TomlTable -> processTomlTable(value, property.returnType, subExtensionObject)
-                            is TomlArray -> processTomlArray(value, property.returnType, subExtensionObject)
-                            else -> {
-                                value?.let {
-                                    logger.LOG { "Adding $value to MutableCollection ${property.name}" }
-                                    (property.get(extension) as MutableCollection<Any>).add(value)
-                                }
-                            }
-                        }
-                    }
+                    processProperty(property, table, tableKey, extension)
                 } else {
                     // last ditch, look for member.
-                    val callables = dslTypeResult.members[tableKey]
-                        ?: dslTypeResult.members["set${tableKey.capitalized()}"]
-                    if (callables != null ) {
-                        logger.LOG { "Found ${callables.size} potential candidates for $tableKey" }
-                        invokeMethod(callables, extension, table, tableKey)
+                    if (mapTypes.any { it.isAssignableFrom(type.javaObjectType) }) {
+                        // TODO: figure out a better way to handle map types
+                        val callables = dslTypeResult.members["put"]
+                        if (callables != null) {
+                            invokePutMethod(callables, extension, table, tableKey)
+                        }else {
+                            issueLogger.raiseError(
+                                "Cannot find method put in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
+                            )
+                        }
                     } else {
-                        issueLogger.raiseError(
-                            "Cannot find $tableKey in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
-                        )
+                        val callables = dslTypeResult.members[tableKey]
+                            ?: dslTypeResult.members["set${tableKey.capitalized()}"]
+                        if (callables != null ) {
+                            logger.LOG { "Found ${callables.size} potential candidates for $tableKey" }
+                            invokeMethod(callables, extension, table, tableKey)
+                        } else {
+                            issueLogger.raiseError(
+                                "Cannot find $tableKey in ${dslTypeResult.dslType}, available members : \n $dslTypeResult"
+                            )
+                        }
                     }
-
                 }
             }
         }
@@ -273,9 +317,14 @@ class GenericDeclarativeParser(
             for (i in 0 until table.size()) {
                 // collection only have one argument, the content type.
                 val contentType: KTypeProjection = type.arguments[0]
-                extractFromArray(table, i, contentType).let {
-                    logger.LOG { "Adding $it to $extension " }
-                    (extension as MutableCollection<Any>).add(it)
+                val mutableExtension = extension as MutableCollection<Any>?
+                if (mutableExtension != null) {
+                    extractFromArray(table, i, contentType).let {
+                        logger.LOG { "Adding $it to $extension " }
+                            mutableExtension.add(it)
+                    }
+                } else {
+                    println("Extension is null. Ignoring : ${type.jvmErasure}")
                 }
             }
         } else {
@@ -299,6 +348,7 @@ class GenericDeclarativeParser(
                 Float::class.java -> table.getDouble(index).toFloat()
                 Double::class.java -> table.getDouble(index)
                 File::class.java -> project.file(table.getString(index))
+                JavaVersion::class.java -> JavaVersion.valueOf(table.getString(index))
                 else -> throw IllegalArgumentException("Error: extractFromArray does not handle $clazz")
             }
         )
@@ -311,6 +361,13 @@ class GenericDeclarativeParser(
             ?: throw RuntimeException("No value provided for key $key")
     }
 
+    private fun getPropertyValueOrNull(table: TomlTable, key: String, type: KType): Any? {
+        return tableExtractors[type]?.invoke(table, key)
+    }
+
+    private fun getPropertyValueOrNull(table: TomlTable, key: String, property: KMutableProperty1<out Any?, Any>): Any? =
+        getPropertyValueOrNull(table, key, property.returnType.withNullability(false))
+
     private fun getPropertyValue(table: TomlTable, key: String, property: KMutableProperty1<out Any?, Any>): Any =
         getPropertyValue(table, key, property.returnType.withNullability(false))
 
@@ -321,6 +378,7 @@ class GenericDeclarativeParser(
                 Boolean::class.java -> value.toString().toBoolean()
                 Int::class.java -> value.toString().toInt()
                 File::class.java -> project.file(value)
+                JavaVersion::class.java -> JavaVersion.valueOf(value.toString())
                 Object::class.java -> value
                 else -> throw IllegalArgumentException("Cannot convert from ${value.javaClass} to $clazz")
             }
@@ -341,6 +399,66 @@ class GenericDeclarativeParser(
             }?.let { newValue ->
                 if (targetExtension is MutableCollection<*>) {
                     (targetExtension as MutableCollection<Any>).add(newValue)
+                }
+            }
+        }
+    }
+
+    private fun invokePutMethod(callables: Collection<KCallable<*>>, extension: Any, table: TomlTable, tableKey: String) {
+        val declarativeForm = table.get(tableKey)
+        if (declarativeForm == null) {
+            logger.LOG { "Error, empty value for key $tableKey"}
+            return
+        }
+        for (callable in callables) {
+            if (callable.valueParameters.size != 2) {
+                logger.LOG { "$callable has been eliminated because it has ${callable.parameters.size} parameter(s)"}
+                continue
+            }
+            val parameterType = callable.parameters[2].type.withNullability(false)
+            if (declarativeForm is TomlTable) {
+                // if we have a table, that means we are looking at an object that needs to be constructed.
+                // So far, I am only supporting static methods with one parameter, but eventually, we need to look
+                // at constructors, etc...
+                if (declarativeForm.size() != 1) {
+                    logger.LOG { "Table at $tableKey has ${declarativeForm.size()} elements which is unsupported" }
+                    return
+                }
+                val staticMethodName = declarativeForm.keySet().single()
+                try {
+                    parameterType.jvmErasure.java.getMethod(
+                        staticMethodName,
+                        String::class.java
+                    ).let {
+                        logger.LOG { "$parameterType extracted using $it" }
+                        val parameterValue = it.invoke(
+                            null,
+                            declarativeForm.getString(
+                                staticMethodName
+                            )
+                        )
+                        logger.LOG { "Invoking $callable with $parameterValue" }
+                        callable.call(extension, tableKey, parameterValue)
+                        return
+                    }
+                } catch (e : NoSuchMethodException) {
+                    logger.LOG { "$callable has been eliminated, a static method named $staticMethodName does not exist" }
+                }
+            } else {
+                val resolvedValue = if (tableExtractors[parameterType] != null) {
+                    getPropertyValue(table, tableKey, parameterType)
+                } else if (parameterType.jvmErasure.java.isAssignableFrom(declarativeForm.javaClass)) {
+                    declarativeForm
+                } else {
+                    contexts.reversed()
+                        .firstNotNullOfOrNull { it.resolve(declarativeForm, parameterType.jvmErasure.java) }
+                }
+                if (resolvedValue != null) {
+                    logger.LOG { "Invoking $callable with $resolvedValue" }
+                    callable.call(extension, tableKey, resolvedValue)
+                    return
+                } else {
+                    logger.LOG { "$callable has been eliminated, we cannot handle $parameterType extraction" }
                 }
             }
         }
@@ -403,4 +521,10 @@ class GenericDeclarativeParser(
             }
         }
     }
+
+    private val mapTypes = setOf(
+        Map::class.java,
+        MapProperty::class.java,
+        ListMultimap::class.java
+    )
 }
