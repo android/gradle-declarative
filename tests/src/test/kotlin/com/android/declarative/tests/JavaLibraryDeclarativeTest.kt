@@ -82,6 +82,8 @@ class JavaLibraryDeclarativeTest {
 
             [android.defaultConfig]
             minSdk = 21
+            [android.aaptOptions]
+            noCompress = ["2"]
 
             [dependencies]
             implementation = [
