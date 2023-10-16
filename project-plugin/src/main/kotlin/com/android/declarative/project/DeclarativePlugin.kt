@@ -45,9 +45,11 @@ class DeclarativePlugin @Inject constructor(
         get() = "build.gradle.toml"
 
     override fun apply(project: Project) {
-        println("Project declarative plugin applied in ClassLoader : \n${this.javaClass.classLoader.name}")
 
         val issueLogger = IssueLogger(lenient = false, logger = LoggerWrapper(project.logger))
+        issueLogger.logger.LOG {
+            "Project declarative plugin applied in ClassLoader : \n${this.javaClass.classLoader.name}"
+        }
         val cache = DslTypesCache()
         try {
             parseDeclarativeBuildFile(project, issueLogger, project.layout.projectDirectory.file(buildFileName), cache)
@@ -86,7 +88,7 @@ class DeclarativePlugin @Inject constructor(
         // plugins must be applied first so extensions are correctly registered.
         parsedDecl.getArray("plugins")?.also { plugins ->
             PluginParser().parse(plugins).forEach { pluginInfo ->
-                issueLogger.logger.quiet("In ${project.path} , applying ${pluginInfo.id}")
+                issueLogger.logger.LOG { "In ${project.path} , applying ${pluginInfo.id}" }
                 project.plugins.apply(pluginInfo.id)
             }
         }

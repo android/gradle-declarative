@@ -21,6 +21,7 @@ import com.android.declarative.common.DslTypesCache
 import com.android.declarative.common.LoggerWrapper
 import com.android.declarative.internal.IssueLogger
 import com.android.declarative.internal.LOG
+import com.android.declarative.internal.toml.safeGetString
 import com.google.common.collect.ListMultimap
 import org.gradle.api.JavaVersion
 import org.gradle.api.NamedDomainObjectContainer
@@ -41,6 +42,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.KTypeProjection
 import kotlin.reflect.full.createType
 import kotlin.reflect.full.isSubclassOf
+import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.full.withNullability
 import kotlin.reflect.jvm.javaField
@@ -64,9 +66,18 @@ class GenericDeclarativeParser(
             String::class.createType(listOf(), false) to { table, key -> table.getString(key) },
             Boolean::class.createType(listOf(), false) to { table, key -> table.getBoolean(key) },
             Double::class.createType(listOf(), false) to { table, key -> table.getDouble(key) },
-            File::class.createType(listOf(), false) to { table, key -> File(table.getString(key)!!)},
+            File::class.createType(listOf(), false) to { table, key -> File(table.safeGetString(key))},
             JavaVersion::class.createType(listOf(), false) to { table, key -> JavaVersion.valueOf(table.getString(key)!!)},
             Any::class.createType(listOf(), false) to { table, key -> table.get(key) }
+        )
+
+        private val arrayExtractors = mapOf<KType, (array: TomlArray, index: Int) -> Any?>(
+            String::class.createType(listOf(), false) to { array, index -> array.getString(index) },
+            Boolean::class.createType(listOf(), false) to { array, index -> array.getBoolean(index) },
+            Float::class.createType(listOf(), false) to { array, index -> array.getDouble(index).toFloat() },
+            Double::class.createType(listOf(), false) to { array, index -> array.getDouble(index) },
+            File::class.createType(listOf(), false) to { array, index -> File(array.getString(index)) },
+            JavaVersion::class.createType(listOf(), false) to { array, index -> JavaVersion.valueOf(array.getString(index)) },
         )
     }
 
@@ -79,8 +90,13 @@ class GenericDeclarativeParser(
 
         fun callMember(
             memberName: String,
-            parameters: TomlArray,
+            parameters: TomlArray?,
             genericDeclarativeParser: GenericDeclarativeParser
+        ): Any?
+
+        fun callMember(
+            memberName: String,
+            parameters: List<Any>,
         ): Any?
     }
 
@@ -105,14 +121,22 @@ class GenericDeclarativeParser(
 
         override fun callMember(
             memberName: String,
-            parameters: TomlArray,
+            parameters: TomlArray?,
             genericDeclarativeParser: GenericDeclarativeParser
         ) =
             findMember(memberName)?.let { kCallable ->
-                val parameterValues: List<Any> = kCallable.valueParameters
-                    .mapIndexed { index, kParameter ->
-                        genericDeclarativeParser.extractFromArray(parameters, index, kParameter.type)
-                    }
+                val parameterValues: List<Any> =
+                    parameters?.let {
+                        kCallable.valueParameters
+                            .mapIndexed { index, kParameter ->
+                                genericDeclarativeParser.extractFromArray(it, index, kParameter.type)
+                            }
+                    } ?: listOf()
+                return@let kCallable.call(extension, *parameterValues.toTypedArray())
+            }
+
+        override fun callMember(memberName: String, parameterValues: List<Any>): Any? =
+            findMember(memberName)?.let { kCallable ->
                 return@let kCallable.call(extension, *parameterValues.toTypedArray())
             }
     }
@@ -131,12 +155,15 @@ class GenericDeclarativeParser(
         override fun findMember(memberName: String): KFunction<Any>? = null
         override fun callMember(
             memberName: String,
-            parameters: TomlArray,
+            parameters: TomlArray?,
             genericDeclarativeParser: GenericDeclarativeParser
         ): Any {
             throw RuntimeException("Cannot invoke method on NamedDomainObjectContainer")
         }
 
+        override fun callMember(memberName: String, parameters: List<Any>): Any? {
+            throw RuntimeException("Cannot invoke method on NamedDomainObjectContainer")
+        }
     }
 
 
@@ -353,30 +380,51 @@ class GenericDeclarativeParser(
     fun extractFromArray(table: TomlArray, index: Int, type: KTypeProjection): Any =
         type.type?.let {
             extractFromArray(table, index, it)
-        } ?: extractFromArray(table, index, String::class.java)
+        } ?: extractFromArray(table, index, String::class.createType(listOf(), false))
 
-    private fun extractFromArray(table: TomlArray, index: Int, type: KType): Any =
-        extractFromArray(table, index, type.jvmErasure.java)
+    private fun extractFromArray(array: TomlArray, index: Int, type: KType): Any  {
+        val value = arrayExtractors[type]?.invoke(array, index)
+            ?:
+                contexts.reversed()
+                    .firstNotNullOfOrNull { it.resolve(array, type.jvmErasure.java) }
 
-    private fun <T : Any> extractFromArray(table: TomlArray, index: Int, clazz: Class<T>): T =
-        clazz.cast(
-            when (clazz) {
-                String::class.java -> table.getString(index)
-                Boolean::class.java -> table.getBoolean(index)
-                Float::class.java -> table.getDouble(index).toFloat()
-                Double::class.java -> table.getDouble(index)
-                File::class.java -> project.file(table.getString(index))
-                JavaVersion::class.java -> JavaVersion.valueOf(table.getString(index))
-                else -> throw IllegalArgumentException("Error: extractFromArray does not handle $clazz")
-            }
-        )
+        if (value == null) {
+            throw RuntimeException("$type extraction from array is not supported")
+        }
+        return value
+    }
 
     private fun getPropertyValue(table: TomlTable, key: String, type: KType): Any {
         val tableExtractor = tableExtractors[type]
-            ?: throw RuntimeException("Cannot handle unwrapping $type")
+        if (tableExtractor == null) {
+            val containee = findContainerForTypeAndName(type, key, table.getString(key)!! )
+                ?: throw RuntimeException("Cannot handle unwrapping $type")
+
+            return containee
+        }
 
         return tableExtractor.invoke(table, key)
             ?: throw RuntimeException("No value provided for key $key")
+    }
+
+    private fun findContainerForTypeAndName(
+        type: KType,
+        name: String,
+        declarativeValue: String,
+    ):Any? {
+        contexts.reversed().forEach { context ->
+            context.findMember(name + 's')?.let { callable ->
+                val value = context.callMember(name + 's', null, this)
+                if (value is NamedDomainObjectContainer<*>) {
+                    val domainObjectType = callable.returnType.arguments[0].type
+                        ?: throw RuntimeException("${callable.name} returned a NamedDomainObjectContainer with no parameter type")
+                    if (type == domainObjectType || domainObjectType.isSubtypeOf(type)) {
+                        return value.getByName(declarativeValue)
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun getPropertyValueOrNull(table: TomlTable, key: String, type: KType): Any? {
@@ -489,15 +537,30 @@ class GenericDeclarativeParser(
             return
         }
         for (callable in callables) {
-            if (callable.valueParameters.size != 1) {
-                logger.LOG { "$callable has been eliminated because it has ${callable.valueParameters.size} parameter(s)"}
+
+            val numberOfParameters = if (declarativeForm is TomlArray) {
+                // we are dealing with multiple parameters.
+                declarativeForm.size()
+            } else 1
+
+            if (callable.valueParameters.size != numberOfParameters) {
+                logger.LOG { "$callable has been eliminated because it has ${callable.valueParameters.size} parameter(s) " +
+                        "while $numberOfParameters were provided"}
                 continue
             }
-            val parameterType = callable.parameters[1].type.withNullability(false)
+
+            // check that all parameter types are ok.
+            if (!checkArrayParameterTypes(callable, declarativeForm)) {
+                logger.LOG { "$callable has been eliminated because its parameter types are not compatible"}
+                continue
+            }
+
             if (declarativeForm is TomlTable) {
                 // if we have a table, that means we are looking at an object that needs to be constructed.
                 // So far, I am only supporting static methods with one parameter, but eventually, we need to look
                 // at constructors, etc...
+                val parameterType = callable.parameters[1].type.withNullability(false)
+
                 if (declarativeForm.size() != 1) {
                     logger.LOG { "Table at $tableKey has ${declarativeForm.size()} elements which is unsupported" }
                     return
@@ -523,21 +586,36 @@ class GenericDeclarativeParser(
                     logger.LOG { "$callable has been eliminated, a static method named $staticMethodName does not exist" }
                 }
             } else {
-                val resolvedValue = if (tableExtractors[parameterType] != null) {
-                    getPropertyValue(table, tableKey, parameterType)
+                val parameters = if (declarativeForm is TomlArray) {
+                    extractParameterValuesFromArray(callable, declarativeForm)
                 } else {
-                    contexts.reversed()
-                        .firstNotNullOfOrNull { it.resolve(declarativeForm, parameterType.jvmErasure.java) }
+                    val parameterType = callable.parameters[1].type.withNullability(false)
+                    listOf(if (tableExtractors[parameterType] != null) {
+                        getPropertyValue(table, tableKey, parameterType)
+                    } else {
+                        contexts.reversed()
+                            .firstNotNullOfOrNull { it.resolve(declarativeForm, parameterType.jvmErasure.java) }
+                    })
                 }
-                if (resolvedValue != null) {
-                    logger.LOG { "Invoking $callable with $resolvedValue" }
-                    callable.call(extension, resolvedValue)
-                    return
-                } else {
-                    logger.LOG { "$callable has been eliminated, we cannot handle $parameterType extraction" }
+
+                logger.LOG { "Invoking $callable with $parameters" }
+                callable.call(extension, *parameters.toTypedArray())
+                return
+            }
+        }
+    }
+
+    private fun checkArrayParameterTypes(callable: KCallable<*>, declarativeForm: Any): Boolean {
+        callable.valueParameters.forEach {
+            if (!arrayExtractors.containsKey(it.type)) {
+                if (contexts.reversed().firstNotNullOfOrNull { context ->
+                    context.resolve(declarativeForm, it.type.jvmErasure.java)
+                } == null) {
+                    return false
                 }
             }
         }
+        return true
     }
 
     private val mapTypes = setOf(
@@ -545,4 +623,10 @@ class GenericDeclarativeParser(
         MapProperty::class.java,
         ListMultimap::class.java
     )
+
+    private fun extractParameterValuesFromArray(callable: KCallable<*>, parametersValues: TomlArray): List<Any> =
+        callable.valueParameters.mapIndexed { index, parameterType ->
+            extractFromArray(parametersValues, index, parameterType.type)
+        }
+
 }

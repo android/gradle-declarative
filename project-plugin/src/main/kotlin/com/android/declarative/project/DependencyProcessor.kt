@@ -20,6 +20,7 @@ package com.android.declarative.project
 import com.android.declarative.common.AbstractDeclarativePlugin
 import com.android.declarative.common.cache.VersionCatalogs
 import com.android.declarative.internal.IssueLogger
+import com.android.declarative.internal.LOG
 import com.android.declarative.internal.model.DependencyInfo
 import com.android.declarative.internal.model.DependencyInfo.Alias
 import com.android.declarative.internal.model.DependencyInfo.ExtensionFunction
@@ -91,7 +92,9 @@ class DependencyProcessor(
         val versionCatalog = versionCatalogs.getVersionCatalog(project, versionCatalogIdentifier)
         val lib = versionCatalog.findLibrary(libraryName)
         lib.ifPresentOrElse({
-            println("Adding Version catalog ${dependency.alias} to ${dependency.configuration}")
+            issueLogger.logger.LOG {
+                "Adding Version catalog ${dependency.alias} to ${dependency.configuration}"
+            }
             dependencyHandler.add(
                 dependency.configuration,
                 it
@@ -104,21 +107,15 @@ class DependencyProcessor(
     }
 
     private fun addPlatformDependency(dependency: Platform) {
-        println("Adding platform ${dependency.name} to ${dependency.configuration}")
+        issueLogger.logger.LOG {"Adding platform ${dependency.name} to ${dependency.configuration}" }
         if (dependency.name.contains(".")) {
-            // TODO: Check that the assumption of a notation with . is a version catalog alias.
             val versionCatalogIdentifier = dependency.name.substringBefore('.')
             val platformName = dependency.name.substringAfter('.')
             val versionCatalog = versionCatalogs.getVersionCatalog(project, versionCatalogIdentifier)
             val lib = versionCatalog.findLibrary(platformName)
-            if (lib.isPresent) {
-                println("Adding platform ${lib.get().get()} to ${dependency.configuration}")
-
-                dependencyHandler.platform(lib.get().get().toString())
+            lib.ifPresentOrElse(dependencyHandler::platform) {
+                issueLogger.raiseError("Cannot find ${dependency.name} in version catalog")
             }
-//            lib.ifPresentOrElse(dependencyHandler::platform) {
-//                issueLogger.raiseError("Cannot find ${dependency.name} in version catalog")
-//            }
         } else {
             dependencyHandler.platform(
                 dependency.name
@@ -163,7 +160,7 @@ class DependencyProcessor(
             "gradleTestKit" -> dependencyFactory.gradleTestKit()
             else -> dependencyFactory.create(dependencyInfo.notation)
         }
-        println("Adding $dependency to ${dependencyInfo.configuration}")
+        issueLogger.logger.LOG {"Adding $dependency to ${dependencyInfo.configuration}" }
         dependencyHandler.add(dependencyInfo.configuration, dependency)
     }
 
@@ -190,7 +187,7 @@ class DependencyProcessor(
                     dependency.parameters["version"],
                 ) as String
             )
-            println("Adding ${gradleDependency.name} to ${dependency.configuration}")
+            issueLogger.logger.LOG { "Adding ${gradleDependency.name} to ${dependency.configuration}" }
             dependencyHandler.add(dependency.configuration, gradleDependency)
         }
     }
