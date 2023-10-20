@@ -91,7 +91,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             parseResult
         }
 
-        val includedProjectsCount = declareSubProjectsToGradle(settingsDeclarations, settings)
+        val includedProjects = declareSubProjectsToGradle(settingsDeclarations, settings)
 
         val pluginManagementIncludedBuild: MutableList<String> = mutableListOf()
 
@@ -119,7 +119,9 @@ class SettingsDeclarativePlugin @Inject constructor(
                     // if the user does not specify the `id`, it means they are not interested in providing plugins
                     // versions to the plugin management and probably solely relies on classpath configuration.
                     if (table.contains("id")) {
-                        println("Applying plugin ${table.getString("id")} version ${table.getString("version")}")
+                        logger.logger.LOG {
+                            "Applying plugin ${table.getString("id")} version ${table.getString("version")}"
+                        }
                         val pluginDependencySpec = pluginManagement.plugins
                             .id(table.safeGetString("id"))
                         if (table.contains("version")) {
@@ -142,7 +144,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             )
         }
 
-        var remainingProjectsToInitialize = includedProjectsCount
+        var remainingProjectsToInitialize = includedProjects.size
         settings.gradle.beforeProject { project ->
 
             val includedBuildPluginCaches: List<IncludedBuildPluginCache> =
@@ -161,12 +163,18 @@ class SettingsDeclarativePlugin @Inject constructor(
                     project,
                     includedBuildPluginCaches)
             } else {
-                configureSubProject(
-                    project
-                )
-                remainingProjectsToInitialize--
+                if (includedProjects.contains(project.path)) {
+                    configureSubProject(
+                        project
+                    )
+                    remainingProjectsToInitialize--
+                } else {
+                    logger.logger.LOG {"Ignored ${project.path}" }
+                }
                 if (remainingProjectsToInitialize == 0) {
-                    println("${nonDeclarativeProjectCounter.get()} sub projects are not using declarative mode.")
+                    logger.logger.verbose(
+                        "${nonDeclarativeProjectCounter.get()} sub projects are not using declarative mode."
+                    )
                 }
             }
         }
@@ -240,7 +248,6 @@ class SettingsDeclarativePlugin @Inject constructor(
         // only registers the declarative plugin if there is a build.gradle.toml file present in the project dir.
         if (projectDeclarativeFile.isPresent) {
 
-
             GradleIssuesWorkarounds.installVersionCatalogSupport(project)
 
             // apply declarative plugin last as it will immediately apply the project's declared plugins which
@@ -283,7 +290,9 @@ class SettingsDeclarativePlugin @Inject constructor(
                     } else {
                         table.safeGetString("module")
                     }
-                    println("Adding $notation to classpath")
+                    logger.logger.LOG {
+                        "Adding $notation to classpath"
+                    }
                     dependencyHandler.add(
                         ScriptHandler.CLASSPATH_CONFIGURATION,
                         notation
@@ -318,13 +327,13 @@ class SettingsDeclarativePlugin @Inject constructor(
      * @param settings [Settings] use to include sub project.
      * @return the number of sub projects included
      */
-    private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings): Int {
+    private fun declareSubProjectsToGradle(settingsDeclarations: TomlParseResult, settings: Settings): List<String> {
         val dependenciesResolver = DependenciesResolver(logger)
 
-        var includedProjectsNumber = 0
         val alreadyAddedProjects = mutableSetOf<String>()
 
         val transitiveDependenciesStartTime = System.currentTimeMillis()
+        val includedProjects = mutableListOf<String>()
 
         val listOfFocusedProjects = getListOfFocusedProjects(settings, settingsDeclarations)
         if (listOfFocusedProjects.isNotEmpty()) {
@@ -339,7 +348,7 @@ class SettingsDeclarativePlugin @Inject constructor(
                                 it.set(settings.settingsDir)
                             }
                             val buildDir = objects.directoryProperty().also {
-                                it.set(settingsDir.dir(relativePath.substring(1)))
+                                it.set(settingsDir.dir(relativePath.substring(1).replace(':', File.separatorChar)))
                             }
 
                             val declarativeFileContent = DeclarativeFileValueSource.enlist(
@@ -360,7 +369,7 @@ class SettingsDeclarativePlugin @Inject constructor(
                     node.getTransitiveDependencies().forEach {
                         if (!alreadyAddedProjects.contains(it.path)) {
                             settings.include(it.path)
-                            includedProjectsNumber++
+                            includedProjects.add(it.path)
                             alreadyAddedProjects.add(it.path)
                         }
                     }
@@ -372,7 +381,7 @@ class SettingsDeclarativePlugin @Inject constructor(
             settingsDeclarations.forEach("include") { projectName ->
                 //println("Including `$projectName` project")
                 settings.include(projectName)
-                includedProjectsNumber++
+                includedProjects.add(projectName)
             }
         }
         println("Calculated transitive dependencies in ${System.currentTimeMillis() - transitiveDependenciesStartTime}")
@@ -380,7 +389,7 @@ class SettingsDeclarativePlugin @Inject constructor(
         settingsDeclarations.forEach("include") {
             totalProjectsNumber++
         }
-        println("Included $includedProjectsNumber projects, discarded ${totalProjectsNumber - includedProjectsNumber}")
-        return includedProjectsNumber
+        logger.logger.verbose("Included ${includedProjects.size} projects, discarded ${totalProjectsNumber - includedProjects.size}")
+        return includedProjects
     }
 }
